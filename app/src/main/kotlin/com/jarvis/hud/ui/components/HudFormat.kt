@@ -1,13 +1,13 @@
 package com.jarvis.hud.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Flight
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -20,7 +20,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-/** Formatting + mapping helpers shared across HUD screens. */
+/** Formatting + mapping helpers shared across screens. */
 object HudFormat {
   private val enIn: Locale = Locale.forLanguageTag("en-IN")
 
@@ -42,27 +42,30 @@ object HudFormat {
     else -> "₹" + amount.toLong()
   }
 
-  fun time(millis: Long): String = SimpleDateFormat("HH:mm", Locale.UK).format(Date(millis))
+  fun time(millis: Long): String = SimpleDateFormat("h:mm a", Locale.UK).format(Date(millis))
 
-  fun dayShort(millis: Long): String = SimpleDateFormat("EEE", Locale.UK).format(Date(millis)).uppercase(Locale.UK)
+  fun dayShort(millis: Long): String = SimpleDateFormat("EEE", Locale.UK).format(Date(millis))
 
-  fun dateTime(millis: Long): String = SimpleDateFormat("dd MMM HH:mm", Locale.UK).format(Date(millis)).uppercase(Locale.UK)
+  fun dateTime(millis: Long): String = SimpleDateFormat("d MMM, h:mm a", Locale.UK).format(Date(millis))
+
+  fun longDate(millis: Long = System.currentTimeMillis()): String =
+    SimpleDateFormat("EEEE, d MMMM", Locale.UK).format(Date(millis))
 
   fun relative(millis: Long, now: Long = System.currentTimeMillis()): String {
     val diff = now - millis
     val min = diff / 60_000
     return when {
       diff < 0 -> dateTime(millis)
-      min < 1 -> "NOW"
-      min < 60 -> "${min}M AGO"
-      min < 60 * 24 -> "${min / 60}H AGO"
-      min < 60 * 24 * 7 -> "${min / (60 * 24)}D AGO"
+      min < 1 -> "Just now"
+      min < 60 -> "${min}m ago"
+      min < 60 * 24 -> "${min / 60}h ago"
+      min < 60 * 24 * 7 -> "${min / (60 * 24)}d ago"
       else -> dateTime(millis)
     }
   }
 
   fun duration(sec: Long): String = when {
-    sec <= 0 -> "--"
+    sec <= 0 -> "—"
     sec < 60 -> "${sec}s"
     sec < 3600 -> "${sec / 60}m ${sec % 60}s"
     else -> "${sec / 3600}h ${(sec % 3600) / 60}m"
@@ -117,4 +120,12 @@ fun Priority.color(): Color = when (this) {
   Priority.HIGH -> HudColors.Amber
   Priority.NORMAL -> HudColors.Cyan
   Priority.LOW -> HudColors.TextMuted
+}
+
+/** "Urgent" / "High" / … for display. */
+fun Priority.displayLabel(): String = when (this) {
+  Priority.CRITICAL -> "Urgent"
+  Priority.HIGH -> "High"
+  Priority.NORMAL -> "Normal"
+  Priority.LOW -> "Low"
 }

@@ -1,0 +1,239 @@
+package com.jarvis.hud.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldColors
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.jarvis.hud.ui.theme.HudColors
+
+val CardShape = RoundedCornerShape(20.dp)
+
+/** Rounded surface card. Clickable when [onClick] is set. */
+@Composable
+fun JCard(
+  modifier: Modifier = Modifier,
+  onClick: (() -> Unit)? = null,
+  color: Color = HudColors.Surface,
+  borderColor: Color = HudColors.OutlineSoft,
+  padding: Dp = 16.dp,
+  content: @Composable ColumnScope.() -> Unit,
+) {
+  Column(
+    modifier
+      .fillMaxWidth()
+      .clip(CardShape)
+      .background(color)
+      .border(1.dp, borderColor, CardShape)
+      .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+      .padding(padding),
+    content = content,
+  )
+}
+
+/** Title above a group of cards, with an optional trailing text action. */
+@Composable
+fun SectionHeader(
+  title: String,
+  modifier: Modifier = Modifier,
+  trailing: String? = null,
+  onTrailingClick: (() -> Unit)? = null,
+) {
+  Row(
+    modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text(title, style = MaterialTheme.typography.titleMedium, color = HudColors.Text, modifier = Modifier.weight(1f))
+    if (trailing != null) {
+      if (onTrailingClick != null) {
+        TextButton(onClick = onTrailingClick, contentPadding = PaddingValues(horizontal = 8.dp)) {
+          Text(trailing, style = MaterialTheme.typography.labelLarge)
+        }
+      } else {
+        Text(trailing, style = MaterialTheme.typography.labelMedium, color = HudColors.TextMuted)
+      }
+    }
+  }
+}
+
+/** Small tinted rounded icon used as a leading visual in rows. */
+@Composable
+fun IconBadge(icon: ImageVector, tint: Color, modifier: Modifier = Modifier, size: Dp = 36.dp) {
+  Box(
+    modifier
+      .size(size)
+      .clip(RoundedCornerShape(size / 3))
+      .background(tint.copy(alpha = 0.14f)),
+    contentAlignment = Alignment.Center,
+  ) {
+    Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.52f))
+  }
+}
+
+/** Compact metric card: icon, big value, caption. */
+@Composable
+fun StatCard(
+  label: String,
+  value: String,
+  icon: ImageVector,
+  tint: Color,
+  modifier: Modifier = Modifier,
+  onClick: (() -> Unit)? = null,
+) {
+  JCard(modifier, onClick = onClick, padding = 14.dp) {
+    IconBadge(icon, tint, size = 32.dp)
+    Spacer(Modifier.height(12.dp))
+    Text(
+      value,
+      style = MaterialTheme.typography.titleLarge,
+      color = HudColors.Text,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+    Text(label, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+  }
+}
+
+/** Small rounded label, e.g. a priority or "Free". */
+@Composable
+fun Pill(text: String, color: Color, modifier: Modifier = Modifier) {
+  Text(
+    text,
+    style = MaterialTheme.typography.labelSmall,
+    color = color,
+    maxLines = 1,
+    modifier = modifier
+      .clip(CircleShape)
+      .background(color.copy(alpha = 0.14f))
+      .padding(horizontal = 8.dp, vertical = 2.dp),
+  )
+}
+
+/** Thin rounded progress track. */
+@Composable
+fun Meter(fraction: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 6.dp) {
+  val f = fraction.coerceIn(0f, 1f)
+  Box(
+    modifier
+      .fillMaxWidth()
+      .height(height)
+      .clip(CircleShape)
+      .background(color.copy(alpha = 0.14f)),
+  ) {
+    if (f > 0f) Box(Modifier.fillMaxWidth(f).height(height).clip(CircleShape).background(color))
+  }
+}
+
+/** Centered empty state with an optional action. */
+@Composable
+fun EmptyState(
+  icon: ImageVector,
+  title: String,
+  body: String,
+  modifier: Modifier = Modifier,
+  action: (@Composable () -> Unit)? = null,
+) {
+  Column(
+    modifier.fillMaxWidth().padding(vertical = 28.dp, horizontal = 16.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    IconBadge(icon, HudColors.TextDim, size = 52.dp)
+    Spacer(Modifier.height(14.dp))
+    Text(title, style = MaterialTheme.typography.titleMedium, color = HudColors.Text, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(4.dp))
+    Text(body, style = MaterialTheme.typography.bodyMedium, color = HudColors.TextDim, textAlign = TextAlign.Center)
+    if (action != null) {
+      Spacer(Modifier.height(16.dp))
+      action()
+    }
+  }
+}
+
+/** Muted one-line placeholder inside a card. */
+@Composable
+fun EmptyLine(text: String, modifier: Modifier = Modifier) {
+  Text(text, style = MaterialTheme.typography.bodyMedium, color = HudColors.TextMuted, modifier = modifier.padding(vertical = 4.dp))
+}
+
+/** Row with a leading badge, two lines of text and optional trailing content. */
+@Composable
+fun ListRow(
+  title: String,
+  modifier: Modifier = Modifier,
+  subtitle: String? = null,
+  icon: ImageVector? = null,
+  tint: Color = HudColors.Cyan,
+  onClick: (() -> Unit)? = null,
+  trailing: (@Composable () -> Unit)? = null,
+) {
+  Row(
+    modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(12.dp))
+      .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+      .padding(vertical = 8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.Start,
+  ) {
+    if (icon != null) {
+      IconBadge(icon, tint)
+      Spacer(Modifier.width(12.dp))
+    }
+    Column(Modifier.weight(1f)) {
+      Text(title, style = MaterialTheme.typography.titleSmall, color = HudColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      if (subtitle != null) {
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
+      }
+    }
+    if (trailing != null) {
+      Spacer(Modifier.width(12.dp))
+      trailing()
+    }
+  }
+}
+
+@Composable
+fun jarvisTextFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
+  focusedTextColor = HudColors.Text,
+  unfocusedTextColor = HudColors.Text,
+  focusedBorderColor = HudColors.Cyan,
+  unfocusedBorderColor = HudColors.Outline,
+  cursorColor = HudColors.Cyan,
+  focusedLabelColor = HudColors.Cyan,
+  unfocusedLabelColor = HudColors.TextDim,
+  focusedContainerColor = HudColors.Surface,
+  unfocusedContainerColor = HudColors.Surface,
+  focusedTrailingIconColor = HudColors.Cyan,
+  unfocusedTrailingIconColor = HudColors.TextDim,
+  focusedPlaceholderColor = HudColors.TextMuted,
+  unfocusedPlaceholderColor = HudColors.TextMuted,
+)

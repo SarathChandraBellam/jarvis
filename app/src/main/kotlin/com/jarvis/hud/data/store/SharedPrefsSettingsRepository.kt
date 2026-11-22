@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -32,30 +34,43 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
   private val state = MutableStateFlow(load())
   override val settings: StateFlow<JarvisSettings> = state.asStateFlow()
 
-  override suspend fun update(settings: JarvisSettings) {
+  /** Serializes writes so a slow older save can never land after (and overwrite) a newer one. */
+  private val writeLock = Mutex()
+
+  override suspend fun update(settings: JarvisSettings) = writeLock.withLock {
+    val clean = settings.copy(apiKey = settings.apiKey.trim(), modelId = settings.modelId.trim())
     withContext(Dispatchers.IO) {
       val editor = prefs.edit()
-        .putString(K_MODEL, settings.modelId)
-        .putString(K_CALLSIGN, settings.userCallsign)
-        .putBoolean(K_DEMO, settings.demoModeEnabled)
-        .putBoolean(K_VOICE, settings.voiceEnabled)
-        .putBoolean(K_REDACT, settings.redactSensitiveData)
-        .putStringSet(K_ENABLED, settings.enabledSources.map { it.name }.toSet())
-        .putStringSet(K_AI_SHARE, settings.aiShareSources.map { it.name }.toSet())
-      val key = settings.apiKey.trim()
+        .putString(K_MODEL, clean.modelId)
+        .putString(K_CALLSIGN, clean.userCallsign)
+        .remove(K_LEGACY_DEMO)
+        .putBoolean(K_VOICE, clean.voiceEnabled)
+        .putBoolean(K_REDACT, clean.redactSensitiveData)
+        .putStringSet(K_ENABLED, clean.enabledSources.map { it.name }.toSet())
+        .putStringSet(K_AI_SHARE, clean.aiShareSources.map { it.name }.toSet())
+      val key = clean.apiKey
       if (key.isEmpty()) {
         editor.remove(K_KEY_CT).remove(K_KEY_IV)
       } else if (key != state.value.apiKey || !prefs.contains(K_KEY_CT)) {
-        val enc = runCatching { encrypt(key) }.getOrNull()
-        if (enc != null) {
-          editor.putString(K_KEY_CT, enc.first).putString(K_KEY_IV, enc.second)
-        } else {
-          editor.remove(K_KEY_CT).remove(K_KEY_IV)
+        // Fail loudly instead of silently dropping the key (it would vanish on next launch).
+        val (ct, iv) = try {
+          encrypt(key)
+        } catch (e: Exception) {
+          resetKeystoreKey()
+          runCatching { encrypt(key) }.getOrElse {
+            throw IllegalStateException("Couldn't securely store the API key on this device (${e.javaClass.simpleName}).", it)
+          }
         }
+        editor.putString(K_KEY_CT, ct).putString(K_KEY_IV, iv)
       }
-      editor.apply()
+      check(editor.commit()) { "Couldn't write settings to storage." }
     }
-    state.value = settings.copy(apiKey = settings.apiKey.trim())
+    state.value = clean
+  }
+
+  /** A corrupted/invalidated keystore entry would make every encrypt fail; recreate it once. */
+  private fun resetKeystoreKey() {
+    runCatching { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS) }
   }
 
   private fun load(): JarvisSettings {
@@ -65,7 +80,6 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
         apiKey = loadApiKey(),
         modelId = prefs.getString(K_MODEL, null)?.takeIf { it.isNotBlank() } ?: defaults.modelId,
         userCallsign = prefs.getString(K_CALLSIGN, null)?.takeIf { it.isNotBlank() } ?: defaults.userCallsign,
-        demoModeEnabled = prefs.getBoolean(K_DEMO, defaults.demoModeEnabled),
         voiceEnabled = prefs.getBoolean(K_VOICE, defaults.voiceEnabled),
         redactSensitiveData = prefs.getBoolean(K_REDACT, defaults.redactSensitiveData),
         enabledSources = prefs.getStringSet(K_ENABLED, null)?.let(::toSources) ?: defaults.enabledSources,
@@ -126,7 +140,7 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
     private const val K_KEY_IV = "api_key_iv"
     private const val K_MODEL = "model_id"
     private const val K_CALLSIGN = "callsign"
-    private const val K_DEMO = "demo_mode"
+    private const val K_LEGACY_DEMO = "demo_mode"
     private const val K_VOICE = "voice"
     private const val K_REDACT = "redact"
     private const val K_ENABLED = "enabled_sources"

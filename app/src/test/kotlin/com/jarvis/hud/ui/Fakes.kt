@@ -2,7 +2,6 @@ package com.jarvis.hud.ui
 
 import com.jarvis.hud.contracts.AskAssistant
 import com.jarvis.hud.contracts.BriefingGenerator
-import com.jarvis.hud.contracts.DemoDataProvider
 import com.jarvis.hud.contracts.IntelOrganizer
 import com.jarvis.hud.contracts.IntelStore
 import com.jarvis.hud.contracts.JarvisContainer
@@ -43,18 +42,21 @@ fun rawEvent(id: String, source: DataSource = DataSource.SMS, ts: Long = 1_000L)
 )
 
 class FakePhoneData : PhoneDataSource {
-  var sms: List<RawEvent> = emptyList()
+  var sms: List<RawEvent> = listOf(rawEvent("d1", DataSource.SMS), rawEvent("d3", DataSource.SMS))
+  var calendar = listOf(CalendarEntry("c1", "Standup", 1L, 2L, null))
+  var calls = listOf(CallSummary("k1", "Mom", "INCOMING", 60, 1L))
+  var usage = listOf(AppUsageStat("com.x", "X", 42))
   var smsCalls = 0
   override suspend fun readSms(sinceMillis: Long, limit: Int): List<RawEvent> { smsCalls++; return sms }
-  override suspend fun readCalendar(fromMillis: Long, toMillis: Long): List<CalendarEntry> = emptyList()
-  override suspend fun readRecentCalls(limit: Int): List<CallSummary> = emptyList()
-  override suspend fun readAppUsage(sinceMillis: Long, top: Int): List<AppUsageStat> = emptyList()
+  override suspend fun readCalendar(fromMillis: Long, toMillis: Long): List<CalendarEntry> = calendar
+  override suspend fun readRecentCalls(limit: Int): List<CallSummary> = calls
+  override suspend fun readAppUsage(sinceMillis: Long, top: Int): List<AppUsageStat> = usage
   override fun readTelemetry() = DeviceTelemetry(50, true, 10f, 100f)
 }
 
 class FakeNotifications : NotificationFeed {
   val flow = MutableSharedFlow<RawEvent>(extraBufferCapacity = 16)
-  var buffered: List<RawEvent> = emptyList()
+  var buffered: List<RawEvent> = listOf(rawEvent("d2", DataSource.NOTIFICATION))
   override val events = flow
   override fun snapshot(): List<RawEvent> = buffered
 }
@@ -62,19 +64,6 @@ class FakeNotifications : NotificationFeed {
 class FakePermissions : PermissionChecker {
   var status = PermissionStatus(true, false, true, false, false)
   override fun current() = status
-}
-
-class FakeDemoData : DemoDataProvider {
-  var events: List<RawEvent> = listOf(
-    rawEvent("d1", DataSource.SMS),
-    rawEvent("d2", DataSource.NOTIFICATION),
-    rawEvent("d3", DataSource.SMS),
-  )
-  override fun rawEvents(nowMillis: Long) = events
-  override fun calendar(nowMillis: Long) = listOf(CalendarEntry("c1", "Standup", nowMillis, nowMillis + 1, null))
-  override fun calls(nowMillis: Long) = listOf(CallSummary("k1", "Mom", "INCOMING", 60, nowMillis))
-  override fun appUsage() = listOf(AppUsageStat("com.x", "X", 42))
-  override fun simulatedAlert(nowMillis: Long) = rawEvent("alert-$nowMillis", DataSource.NOTIFICATION, nowMillis)
 }
 
 class FakeSettingsRepo(initial: JarvisSettings = JarvisSettings()) : SettingsRepository {
@@ -177,7 +166,6 @@ class FakeContainer(
   override val phoneData: FakePhoneData = FakePhoneData(),
   override val notifications: FakeNotifications = FakeNotifications(),
   override val permissions: FakePermissions = FakePermissions(),
-  override val demoData: FakeDemoData = FakeDemoData(),
   override val settingsRepo: FakeSettingsRepo = FakeSettingsRepo(),
   override val openRouter: FakeOpenRouter = FakeOpenRouter(),
   override val organizer: FakeOrganizer = FakeOrganizer(),
@@ -186,3 +174,9 @@ class FakeContainer(
   override val store: FakeStore = FakeStore(),
   override val speaker: FakeSpeaker = FakeSpeaker(),
 ) : JarvisContainer
+
+/** A container whose phone has no SMS or buffered notifications. */
+fun emptyContainer() = FakeContainer(
+  phoneData = FakePhoneData().apply { sms = emptyList() },
+  notifications = FakeNotifications().apply { buffered = emptyList() },
+)

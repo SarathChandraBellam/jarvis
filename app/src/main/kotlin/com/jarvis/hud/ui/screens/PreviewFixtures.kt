@@ -32,7 +32,6 @@ object PreviewFixtures {
     override fun onTestOpenRouterConnection() {}
     override fun onFetchOpenRouterModels() {}
     override fun onClearAiCache() {}
-    override fun onInjectSimulatedAlert() {}
     override fun onRequestRuntimePermissions() {}
     override fun onOpenNotificationAccessSettings() {}
     override fun onOpenUsageAccessSettings() {}
@@ -69,7 +68,7 @@ object PreviewFixtures {
     )
     return JarvisUiState(
       selectedTab = tab,
-      syncStatusLine = "SYNC COMPLETE // 12 ITEMS ORGANIZED",
+      syncStatusLine = "Up to date · 12 new items",
       settings = JarvisSettings(userCallsign = "Tony", apiKey = "sk-or-v1-demo"),
       permissions = PermissionStatus(true, false, true, true, false),
       briefing = DailyBriefing(

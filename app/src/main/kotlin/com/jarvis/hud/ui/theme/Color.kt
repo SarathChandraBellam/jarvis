@@ -2,27 +2,25 @@ package com.jarvis.hud.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** J.A.R.V.I.S. HUD palette. Dark only. */
+/** Jarvis palette. Dark only: deep navy surfaces with an arc-reactor cyan accent. */
 object HudColors {
-  val Background = Color(0xFF050A14)
-  val BackgroundElevated = Color(0xFF0A1424)
-  val Panel = Color(0xCC08121F)
-  val PanelSolid = Color(0xFF0B1726)
-  val Grid = Color(0x1400E5FF)
+  val Background = Color(0xFF0A0F1A)
+  val Surface = Color(0xFF121A29)
+  val SurfaceHigh = Color(0xFF1A2436)
+  val SurfaceHighest = Color(0xFF223047)
+  val Outline = Color(0xFF2A3850)
+  val OutlineSoft = Color(0xFF1E2A3D)
 
-  val Cyan = Color(0xFF00E5FF)
-  val CyanDeep = Color(0xFF0091A8)
-  val CyanGlow = Color(0x5500E5FF)
-  val CyanFaint = Color(0x2200E5FF)
-  val Border = Color(0x6600E5FF)
-  val BorderDim = Color(0x3300E5FF)
+  val Cyan = Color(0xFF5CD6F0)
+  val CyanSoft = Color(0x295CD6F0)
+  val OnCyan = Color(0xFF00262F)
 
-  val Amber = Color(0xFFFFB300)
-  val Red = Color(0xFFFF3D57)
-  val Green = Color(0xFF00E676)
-  val Violet = Color(0xFFB388FF)
+  val Amber = Color(0xFFF6B94F)
+  val Red = Color(0xFFFF6E6E)
+  val Green = Color(0xFF45D99B)
+  val Violet = Color(0xFFA996FF)
 
-  val Text = Color(0xFFD6F9FF)
-  val TextDim = Color(0xFF7FB8C4)
-  val TextMuted = Color(0xFF4A7680)
+  val Text = Color(0xFFEAF0F8)
+  val TextDim = Color(0xFFA3B0C4)
+  val TextMuted = Color(0xFF6C7A90)
 }

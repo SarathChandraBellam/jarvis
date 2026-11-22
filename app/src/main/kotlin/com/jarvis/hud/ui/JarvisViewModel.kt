@@ -129,49 +129,35 @@ class JarvisViewModel(
       val startOfToday = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(zone)
       val midnight = startOfToday.toInstant().toEpochMilli()
 
-      status("SCANNING SMS UPLINK…")
-      val sms: List<RawEvent> = when {
-        !s.isEnabled(DataSource.SMS) -> emptyList()
-        s.demoModeEnabled -> emptyList()
-        else -> c.phoneData.readSms(sinceMillis = now - SEVEN_DAYS_MS)
-      }
+      status(STATUS_READING_SMS)
+      val sms: List<RawEvent> =
+        if (s.isEnabled(DataSource.SMS)) c.phoneData.readSms(sinceMillis = now - SEVEN_DAYS_MS) else emptyList()
 
-      status("PARSING NOTIFICATIONS…")
-      val gathered: List<RawEvent> = if (s.demoModeEnabled) {
-        c.demoData.rawEvents(now)
-      } else {
+      status(STATUS_READING_NOTIFICATIONS)
+      val gathered: List<RawEvent> =
         sms + (if (s.isEnabled(DataSource.NOTIFICATION)) c.notifications.snapshot() else emptyList())
-      }
       val fresh = gathered
         .filter { s.isEnabled(it.source) }
         .distinctBy { it.contentHash }
         .filterNot { c.store.isProcessed(it.contentHash) }
 
-      status("ORGANIZING INTEL…")
+      status(STATUS_ORGANIZING)
       val organized: List<OrganizedItem> =
         if (fresh.isEmpty()) emptyList() else c.organizer.organize(fresh, s)
       if (organized.isNotEmpty()) c.store.upsert(organized)
       if (fresh.isNotEmpty()) c.store.markProcessed(fresh.map { it.contentHash })
 
-      status("COMPILING BRIEFING…")
-      val calendar: List<CalendarEntry> = when {
-        !s.isEnabled(DataSource.CALENDAR) -> emptyList()
-        s.demoModeEnabled -> c.demoData.calendar(now)
-        else -> c.phoneData.readCalendar(
+      status(STATUS_BRIEFING)
+      val calendar: List<CalendarEntry> = if (!s.isEnabled(DataSource.CALENDAR)) emptyList() else {
+        c.phoneData.readCalendar(
           fromMillis = midnight,
           toMillis = startOfToday.plusDays(3).toInstant().toEpochMilli(),
         )
       }
-      val calls: List<CallSummary> = when {
-        !s.isEnabled(DataSource.CALL) -> emptyList()
-        s.demoModeEnabled -> c.demoData.calls(now)
-        else -> c.phoneData.readRecentCalls()
-      }
-      val usage: List<AppUsageStat> = when {
-        !s.isEnabled(DataSource.USAGE) -> emptyList()
-        s.demoModeEnabled -> c.demoData.appUsage()
-        else -> c.phoneData.readAppUsage(sinceMillis = midnight)
-      }
+      val calls: List<CallSummary> =
+        if (s.isEnabled(DataSource.CALL)) c.phoneData.readRecentCalls() else emptyList()
+      val usage: List<AppUsageStat> =
+        if (s.isEnabled(DataSource.USAGE)) c.phoneData.readAppUsage(sinceMillis = midnight) else emptyList()
       refreshTelemetry()
       _uiState.update { it.copy(calendarEntries = calendar, recentCalls = calls, appUsageStats = usage) }
 
@@ -180,13 +166,13 @@ class JarvisViewModel(
       c.store.saveBriefing(briefing)
 
       _uiState.update {
-        it.copy(briefing = briefing, syncStatusLine = "SYNC COMPLETE // ${organized.size} NEW ITEMS")
+        it.copy(briefing = briefing, syncStatusLine = syncedLine(organized.size))
       }
     } catch (e: CancellationException) {
       throw e
     } catch (e: Throwable) {
       _uiState.update {
-        it.copy(lastError = e.message ?: e.toString(), syncStatusLine = "SYNC FAILED // CHECK DIAGNOSTICS")
+        it.copy(lastError = e.message ?: e.toString(), syncStatusLine = STATUS_FAILED)
       }
     } finally {
       _uiState.update { it.copy(isSyncing = false) }
@@ -256,7 +242,12 @@ class JarvisViewModel(
     viewModelScope.launch {
       val ok = safely { c.settingsRepo.update(settings) }
       if (pendingSettings === settings) pendingSettings = null
-      if (ok && previous.demoModeEnabled != settings.demoModeEnabled) restartScan()
+      if (!ok) {
+        // Show what is really persisted, not the draft that failed to save.
+        _uiState.update { it.copy(settings = c.settingsRepo.settings.value) }
+      } else if (previous.enabledSources != settings.enabledSources) {
+        restartScan()
+      }
     }
   }
 
@@ -273,7 +264,7 @@ class JarvisViewModel(
       } catch (e: CancellationException) {
         throw e
       } catch (e: Throwable) {
-        ConnectionTestResult(success = false, message = e.message ?: "CONNECTION FAILED")
+        ConnectionTestResult(success = false, message = e.message ?: "Connection failed")
       }
       _uiState.update { it.copy(connectionTestResult = result) }
     }
@@ -298,7 +289,7 @@ class JarvisViewModel(
               it.copy(
                 connectionTestResult = ConnectionTestResult(
                   success = false,
-                  message = e.message ?: "MODEL LIST UNAVAILABLE",
+                  message = e.message ?: "Couldn't load the model list",
                 ),
               )
             }
@@ -317,21 +308,6 @@ class JarvisViewModel(
     restartScan {
       c.store.clear()
       _uiState.update { it.copy(briefing = null) }
-    }
-  }
-
-  // ---------------------------------------------------------------- demo
-
-  override fun onInjectSimulatedAlert() {
-    viewModelScope.launch {
-      safely {
-        val alert = c.demoData.simulatedAlert(clock())
-        val organized = c.organizer.organize(listOf(alert), settings)
-        if (organized.isNotEmpty()) c.store.upsert(organized)
-        c.store.markProcessed(listOf(alert.contentHash))
-        val title = organized.firstOrNull()?.title ?: alert.title
-        _uiState.update { it.copy(syncStatusLine = "INCOMING ALERT // $title") }
-      }
     }
   }
 
@@ -374,10 +350,24 @@ class JarvisViewModel(
 
   private fun nextId(prefix: String) = "$prefix-${clock()}-${idCounter++}"
 
-  private fun noKeyResult() = ConnectionTestResult(success = false, message = "NO API KEY CONFIGURED")
+  private fun noKeyResult() = ConnectionTestResult(success = false, message = NO_KEY_MESSAGE)
 
   companion object {
     private const val SEVEN_DAYS_MS = 7L * 24 * 60 * 60 * 1000
+
+    const val STATUS_READY = "Ready"
+    const val STATUS_READING_SMS = "Reading messages…"
+    const val STATUS_READING_NOTIFICATIONS = "Checking notifications…"
+    const val STATUS_ORGANIZING = "Organizing…"
+    const val STATUS_BRIEFING = "Writing your briefing…"
+    const val STATUS_FAILED = "Sync failed"
+    const val NO_KEY_MESSAGE = "Add an OpenRouter API key first"
+
+    fun syncedLine(newItems: Int) = when (newItems) {
+      0 -> "Up to date"
+      1 -> "Up to date · 1 new item"
+      else -> "Up to date · $newItems new items"
+    }
 
     /** ACTIVE first, then priority CRITICAL→LOW, then newest; DISMISSED items are hidden. */
     internal fun visibleSorted(items: List<OrganizedItem>): List<OrganizedItem> =

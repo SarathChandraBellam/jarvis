@@ -38,7 +38,7 @@ class JarvisViewModelTest {
 
   private fun vm(c: FakeContainer) = JarvisViewModel(c) { now }
 
-  @Test fun demoScanProducesItemsAndBriefing() = test {
+  @Test fun scanProducesItemsAndBriefing() = test {
     val c = FakeContainer()
     val vm = vm(c)
     advanceUntilIdle()
@@ -46,12 +46,12 @@ class JarvisViewModelTest {
     assertEquals(3, s.items.size)
     assertNotNull(s.briefing)
     assertNotNull(c.store.briefing)
-    assertEquals("SYNC COMPLETE // 3 NEW ITEMS", s.syncStatusLine)
+    assertEquals(JarvisViewModel.syncedLine(3), s.syncStatusLine)
     assertFalse(s.isSyncing)
     assertEquals(1, s.calendarEntries.size)
     assertEquals(1, s.recentCalls.size)
     assertEquals(1, s.appUsageStats.size)
-    assertEquals(0, c.phoneData.smsCalls)
+    assertEquals(1, c.phoneData.smsCalls)
     assertEquals(c.permissions.status, s.permissions)
     assertEquals(50, s.telemetry.batteryPercent)
   }
@@ -69,18 +69,18 @@ class JarvisViewModelTest {
     c.store.processed += "hash-d1"
     val vm = vm(c)
     advanceUntilIdle()
-    assertEquals(listOf("d2", "d3"), c.organizer.received.map { it.id })
-    assertEquals("SYNC COMPLETE // 2 NEW ITEMS", vm.uiState.value.syncStatusLine)
+    assertEquals(listOf("d3", "d2"), c.organizer.received.map { it.id })
+    assertEquals(JarvisViewModel.syncedLine(2), vm.uiState.value.syncStatusLine)
 
     // Second scan: everything already processed -> organizer not called again.
     vm.onScanAndOrganize()
     advanceUntilIdle()
     assertEquals(1, c.organizer.calls)
-    assertEquals("SYNC COMPLETE // 0 NEW ITEMS", vm.uiState.value.syncStatusLine)
+    assertEquals("Up to date", vm.uiState.value.syncStatusLine)
   }
 
   @Test fun dismissedItemsHiddenAndSorted() = test {
-    val c = FakeContainer(demoData = FakeDemoData().apply { events = emptyList() })
+    val c = emptyContainer()
     fun item(id: String, p: Priority, st: ItemStatus, ts: Long) =
       OrganizedItem(id, null, IntelCategory.ACTION, id, "", priority = p, status = st, timestamp = ts, source = DataSource.SMS)
     c.store.items.value = listOf(
@@ -137,7 +137,7 @@ class JarvisViewModelTest {
     val r = vm.uiState.value.connectionTestResult
     assertNotNull(r)
     assertFalse(r!!.success)
-    assertEquals("NO API KEY CONFIGURED", r.message)
+    assertEquals(JarvisViewModel.NO_KEY_MESSAGE, r.message)
     assertEquals(0, c.openRouter.testCalls)
   }
 
@@ -165,7 +165,7 @@ class JarvisViewModelTest {
     val vm = vm(c) // init kicks off a scan
     runCurrent()
     assertTrue(vm.uiState.value.isSyncing)
-    assertEquals("ORGANIZING INTEL…", vm.uiState.value.syncStatusLine)
+    assertEquals(JarvisViewModel.STATUS_ORGANIZING, vm.uiState.value.syncStatusLine)
     vm.onScanAndOrganize()
     vm.onScanAndOrganize()
     gate.complete(Unit)
@@ -176,7 +176,7 @@ class JarvisViewModelTest {
   }
 
   @Test fun liveNotificationsAreOrganizedOnce() = test {
-    val c = FakeContainer(demoData = FakeDemoData().apply { events = emptyList() })
+    val c = emptyContainer()
     val vm = vm(c)
     advanceUntilIdle()
     val ev = rawEvent("live", DataSource.NOTIFICATION)
@@ -186,16 +186,6 @@ class JarvisViewModelTest {
     advanceUntilIdle()
     assertEquals(1, c.organizer.calls)
     assertEquals(listOf("item-live"), vm.uiState.value.items.map { it.id })
-  }
-
-  @Test fun simulatedAlertUpdatesStatusLine() = test {
-    val c = FakeContainer()
-    val vm = vm(c)
-    advanceUntilIdle()
-    vm.onInjectSimulatedAlert()
-    advanceUntilIdle()
-    assertEquals("INCOMING ALERT // Title alert-$now", vm.uiState.value.syncStatusLine)
-    assertEquals(4, vm.uiState.value.items.size)
   }
 
   @Test fun clearCacheRescans() = test {
@@ -210,16 +200,44 @@ class JarvisViewModelTest {
     assertNotNull(vm.uiState.value.briefing)
   }
 
-  @Test fun demoToggleTriggersRealScan() = test {
-    val c = FakeContainer()
+  @Test fun enablingASourceTriggersRescan() = test {
+    val noSms = DataSource.entries.toSet() - DataSource.SMS
+    val c = FakeContainer(settingsRepo = FakeSettingsRepo(JarvisSettings(enabledSources = noSms)))
     c.phoneData.sms = listOf(rawEvent("real1"))
     val vm = vm(c)
     advanceUntilIdle()
-    vm.onUpdateSettings(c.settingsRepo.settings.value.copy(demoModeEnabled = false))
+    assertEquals(0, c.phoneData.smsCalls)
+    vm.onUpdateSettings(c.settingsRepo.settings.value.copy(enabledSources = DataSource.entries.toSet()))
     advanceUntilIdle()
     assertEquals(1, c.phoneData.smsCalls)
-    assertFalse(vm.uiState.value.settings.demoModeEnabled)
     assertTrue(vm.uiState.value.items.any { it.id == "item-real1" })
+  }
+
+  @Test fun settingsSavePersistsAndUpdatesState() = test {
+    val c = FakeContainer()
+    val vm = vm(c)
+    advanceUntilIdle()
+    val edited = c.settingsRepo.settings.value.copy(apiKey = "sk-or-v1-x", userCallsign = "Boss", voiceEnabled = false)
+    vm.onUpdateSettings(edited)
+    advanceUntilIdle()
+    assertEquals(edited, c.settingsRepo.settings.value)
+    assertEquals(edited, vm.uiState.value.settings)
+  }
+
+  @Test fun failedSaveSurfacesErrorAndKeepsPersistedSettings() = test {
+    val repo = object : com.jarvis.hud.contracts.SettingsRepository {
+      override val settings = kotlinx.coroutines.flow.MutableStateFlow(JarvisSettings())
+      override suspend fun update(settings: JarvisSettings) = throw IllegalStateException("disk full")
+    }
+    val c = FakeContainer()
+    val vm = JarvisViewModel(object : com.jarvis.hud.contracts.JarvisContainer by c {
+      override val settingsRepo = repo
+    }) { now }
+    advanceUntilIdle()
+    vm.onUpdateSettings(JarvisSettings(userCallsign = "Boss"))
+    advanceUntilIdle()
+    assertEquals("disk full", vm.uiState.value.lastError)
+    assertEquals("Sir", vm.uiState.value.settings.userCallsign)
   }
 
   @Test fun toggleSpeakBriefingSpeaksThenStops() = test {

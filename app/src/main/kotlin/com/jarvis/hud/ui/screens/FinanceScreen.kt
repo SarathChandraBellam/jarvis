@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.SouthWest
+import androidx.compose.material.icons.outlined.NorthEast
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,8 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,17 +36,18 @@ import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.model.OrganizedItem
-import com.jarvis.hud.ui.components.HudBar
-import com.jarvis.hud.ui.components.HudEmptyLine
+import com.jarvis.hud.ui.components.EmptyLine
+import com.jarvis.hud.ui.components.EmptyState
 import com.jarvis.hud.ui.components.HudFormat
-import com.jarvis.hud.ui.components.HudPanel
 import com.jarvis.hud.ui.components.ItemCard
-import com.jarvis.hud.ui.components.StatTile
+import com.jarvis.hud.ui.components.JCard
+import com.jarvis.hud.ui.components.Meter
+import com.jarvis.hud.ui.components.SectionHeader
 import com.jarvis.hud.ui.theme.HudColors
+import kotlin.math.abs
 
 private data class FinanceSummary(
   val todayDebit: Double,
-  val todayCredit: Double,
   val weekDebit: Double,
   val weekCredit: Double,
   /** Oldest → today, 7 entries: (day start millis, debit total). */
@@ -69,7 +71,7 @@ private fun summarize(items: List<OrganizedItem>, now: Long): FinanceSummary {
   }
   val merchants = money
     .filter { !it.isCredit && it.timestamp >= weekStart }
-    .groupBy { (it.merchant ?: it.title).trim().uppercase() }
+    .groupBy { (it.merchant ?: it.title).trim() }
     .mapValues { (_, v) -> v.sumOf { it.amount ?: 0.0 } }
     .entries.sortedByDescending { it.value }
     .take(5)
@@ -79,7 +81,6 @@ private fun summarize(items: List<OrganizedItem>, now: Long): FinanceSummary {
     .sortedWith(compareBy(nullsLast()) { it.dueDate })
   return FinanceSummary(
     todayDebit = sum(today, false),
-    todayCredit = sum(today, true),
     weekDebit = sum(weekStart, false),
     weekCredit = sum(weekStart, true),
     perDay = perDay,
@@ -89,77 +90,92 @@ private fun summarize(items: List<OrganizedItem>, now: Long): FinanceSummary {
   )
 }
 
+/** Money tab: weekly overview, spend chart, bills, merchants, transactions. */
 @Composable
 fun FinanceScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
   val s = remember(state.items) { summarize(state.items, System.currentTimeMillis()) }
   LazyColumn(
     Modifier.fillMaxSize(),
     contentPadding = screenPadding(contentPadding),
-    verticalArrangement = Arrangement.spacedBy(14.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    item(key = "totals") {
-      HudPanel(title = "Ledger") {
+    item(key = "overview") {
+      JCard(padding = 18.dp) {
+        Text("Spent in the last 7 days", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+        Spacer(Modifier.height(4.dp))
+        Text(HudFormat.money(s.weekDebit), style = MaterialTheme.typography.displaySmall, color = HudColors.Text)
+        Spacer(Modifier.height(2.dp))
+        Text("${HudFormat.money(s.todayDebit)} today", style = MaterialTheme.typography.bodyMedium, color = HudColors.TextDim)
+        Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          StatTile("Today out", HudFormat.money(s.todayDebit), Modifier.weight(1f), HudColors.Red, icon = Icons.Outlined.ArrowUpward)
-          StatTile("Today in", HudFormat.money(s.todayCredit), Modifier.weight(1f), HudColors.Green, icon = Icons.Outlined.ArrowDownward)
+          FlowTile("Money in", s.weekCredit, Icons.Outlined.SouthWest, HudColors.Green, Modifier.weight(1f))
+          FlowTile("Money out", s.weekDebit, Icons.Outlined.NorthEast, HudColors.Red, Modifier.weight(1f))
         }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          StatTile("7-day out", HudFormat.money(s.weekDebit), Modifier.weight(1f), HudColors.Red)
-          StatTile("7-day in", HudFormat.money(s.weekCredit), Modifier.weight(1f), HudColors.Green)
-        }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         val net = s.weekCredit - s.weekDebit
         Text(
-          "NET 7D ${if (net >= 0) "+" else "−"}${HudFormat.money(kotlin.math.abs(net))}",
-          style = MaterialTheme.typography.labelMedium,
+          "Net this week: ${if (net >= 0) "+" else "−"}${HudFormat.money(abs(net))}",
+          style = MaterialTheme.typography.labelLarge,
           color = if (net >= 0) HudColors.Green else HudColors.Amber,
         )
       }
     }
     item(key = "chart") {
-      HudPanel(title = "Spend vector // 7D") { SpendChart(s.perDay) }
+      SectionHeader("Daily spending")
+      Spacer(Modifier.height(8.dp))
+      JCard { SpendChart(s.perDay) }
     }
     item(key = "bills") {
-      HudPanel(title = "Upcoming bills", accent = HudColors.Amber,
-        trailing = { Text("${s.bills.size}", style = MaterialTheme.typography.labelSmall, color = HudColors.Amber) }) {
-        if (s.bills.isEmpty()) HudEmptyLine("No bills pending")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          s.bills.forEach { ItemCard(it, actions::onMarkItemStatus) }
-        }
-      }
+      SectionHeader("Upcoming bills", trailing = if (s.bills.isEmpty()) null else "${s.bills.size} due")
+    }
+    if (s.bills.isEmpty()) {
+      item(key = "billsEmpty") { JCard { EmptyLine("No bills pending.") } }
+    } else {
+      items(s.bills, key = { "bill-" + it.id }) { ItemCard(it, actions::onMarkItemStatus) }
     }
     item(key = "merchants") {
-      HudPanel(title = "Top merchants // 7D", accent = HudColors.Violet) {
-        if (s.merchants.isEmpty()) HudEmptyLine("No merchant spend")
+      SectionHeader("Where it went")
+      Spacer(Modifier.height(8.dp))
+      JCard {
+        if (s.merchants.isEmpty()) EmptyLine("No spending this week.")
         val max = s.merchants.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
         s.merchants.forEachIndexed { i, (name, amt) ->
-          Column(Modifier.padding(vertical = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Text("%02d".format(i + 1), style = MaterialTheme.typography.labelSmall, color = HudColors.TextMuted)
-              Spacer(Modifier.width(8.dp))
-              Text(name, style = MaterialTheme.typography.labelMedium, color = HudColors.Text, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-              Text(HudFormat.money(amt), style = MaterialTheme.typography.labelLarge, color = HudColors.Violet)
-            }
-            Spacer(Modifier.height(4.dp))
-            HudBar((amt / max).toFloat(), color = HudColors.Violet, segments = 30)
+          if (i > 0) Spacer(Modifier.height(12.dp))
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(name, style = MaterialTheme.typography.bodyMedium, color = HudColors.Text, maxLines = 1,
+              overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(HudFormat.money(amt), style = MaterialTheme.typography.labelLarge, color = HudColors.Text)
           }
+          Spacer(Modifier.height(6.dp))
+          Meter((amt / max).toFloat(), HudColors.Violet)
         }
       }
     }
-    item(key = "txHeader") {
-      Text(
-        "TRANSACTIONS // ${s.transactions.size}",
-        style = MaterialTheme.typography.labelMedium,
-        color = HudColors.Cyan,
-        modifier = Modifier.padding(top = 4.dp),
-      )
-    }
+    item(key = "txHeader") { SectionHeader("Transactions", trailing = "${s.transactions.size}") }
     if (s.transactions.isEmpty()) {
-      item(key = "txEmpty") { HudEmptyLine("No transactions detected. Run a scan.") }
+      item(key = "txEmpty") {
+        JCard {
+          EmptyState(
+            Icons.Outlined.AccountBalanceWallet,
+            "No transactions yet",
+            "Allow SMS access and refresh. Bank and UPI alerts will show up here.",
+          )
+        }
+      }
     }
-    items(s.transactions, key = { "tx-" + it.id }) { ItemCard(it, actions::onMarkItemStatus) }
+    items(s.transactions, key = { "tx-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, compact = true) }
+  }
+}
+
+@Composable
+private fun FlowTile(label: String, amount: Double, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, modifier: Modifier) {
+  JCard(modifier, color = HudColors.SurfaceHigh, borderColor = Color.Transparent, padding = 12.dp) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Icon(icon, null, tint = tint, modifier = Modifier.padding(end = 6.dp))
+      Text(label, style = MaterialTheme.typography.labelMedium, color = HudColors.TextDim)
+    }
+    Spacer(Modifier.height(4.dp))
+    Text(HudFormat.money(amount), style = MaterialTheme.typography.titleMedium, color = HudColors.Text, maxLines = 1)
   }
 }
 
@@ -170,50 +186,41 @@ private fun SpendChart(perDay: List<Pair<Long, Double>>) {
     Row(Modifier.fillMaxWidth()) {
       perDay.forEach { (_, v) ->
         Text(
-          if (v > 0) HudFormat.moneyCompact(v) else "—",
+          if (v > 0) HudFormat.moneyCompact(v) else "",
           style = MaterialTheme.typography.labelSmall,
-          color = if (v == max && v > 0) HudColors.Amber else HudColors.TextDim,
+          color = if (v == max && v > 0) HudColors.Amber else HudColors.TextMuted,
           textAlign = TextAlign.Center,
           maxLines = 1,
           modifier = Modifier.weight(1f),
         )
       }
     }
-    Spacer(Modifier.height(4.dp))
-    Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+    Spacer(Modifier.height(6.dp))
+    Canvas(Modifier.fillMaxWidth().height(120.dp)) {
       val n = perDay.size.coerceAtLeast(1)
       val slot = size.width / n
-      val barW = slot * 0.46f
-      // Guide lines.
-      val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
-      for (g in 1..3) {
-        val y = size.height * g / 4f
-        drawLine(HudColors.BorderDim, Offset(0f, y), Offset(size.width, y), 1f, pathEffect = dash)
-      }
-      drawLine(HudColors.Border, Offset(0f, size.height), Offset(size.width, size.height), 2f)
+      val barW = slot * 0.5f
+      val radius = CornerRadius(barW / 2, barW / 2)
       perDay.forEachIndexed { i, (_, v) ->
-        val h = (v / max).toFloat() * (size.height - 6f)
         val x = slot * i + (slot - barW) / 2
-        val isPeak = v == max && v > 0
-        val color = if (isPeak) HudColors.Amber else if (i == n - 1) HudColors.Cyan else HudColors.CyanDeep
+        // Track.
+        drawRoundRect(HudColors.SurfaceHigh, Offset(x, 0f), Size(barW, size.height), radius)
+        val h = ((v / max).toFloat() * size.height).coerceAtLeast(if (v > 0) barW else 0f)
         if (h > 0f) {
-          drawRoundRect(
-            Brush.verticalGradient(listOf(color, color.copy(alpha = 0.25f)), startY = size.height - h, endY = size.height),
-            topLeft = Offset(x, size.height - h),
-            size = Size(barW, h),
-            cornerRadius = CornerRadius(2f, 2f),
-          )
-          drawLine(color, Offset(x - 2f, size.height - h), Offset(x + barW + 2f, size.height - h), 3f)
-        } else {
-          drawLine(HudColors.TextMuted, Offset(x, size.height - 2f), Offset(x + barW, size.height - 2f), 2f)
+          val color = when {
+            v == max -> HudColors.Amber
+            i == n - 1 -> HudColors.Cyan
+            else -> HudColors.Cyan.copy(alpha = 0.55f)
+          }
+          drawRoundRect(color, Offset(x, size.height - h), Size(barW, h), radius)
         }
       }
     }
-    Spacer(Modifier.height(4.dp))
+    Spacer(Modifier.height(6.dp))
     Row(Modifier.fillMaxWidth()) {
       perDay.forEachIndexed { i, (day, _) ->
         Text(
-          if (i == perDay.lastIndex) "TODAY" else HudFormat.dayShort(day),
+          if (i == perDay.lastIndex) "Today" else HudFormat.dayShort(day),
           style = MaterialTheme.typography.labelSmall,
           color = if (i == perDay.lastIndex) HudColors.Cyan else HudColors.TextMuted,
           textAlign = TextAlign.Center,

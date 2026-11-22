@@ -1,15 +1,17 @@
 # J.A.R.V.I.S. HUD
 
-An on-device, Iron Man–style HUD for Android (Kotlin + Jetpack Compose). It reads your SMS, notifications, calendar, call log and screen time, sorts them into "intel" (finance, bills, deliveries, travel…), and shows a daily briefing, a finance view and an "Ask Jarvis" chat.
+An on-device personal assistant for Android (Kotlin + Jetpack Compose). It reads your SMS, notifications, calendar, call log and screen time, sorts them into an inbox (finance, bills, deliveries, travel…), and shows a daily briefing, a money view and an "Ask Jarvis" chat.
 
-- **Tabs:** HUD · FINANCE · INTEL · ASK, plus Settings
+- **Tabs:** Home · Money · Inbox · Ask, plus Settings
 - **AI:** OpenRouter (bring your own key, stored encrypted on device) or a fully local parser
 - **Privacy:** optional redaction of numbers, account IDs etc. before anything is sent to the AI
-- **Demo mode:** runs on fake data, so no permissions are needed to try it
+- **Settings save automatically** — there is no Save button
 
 ## Install
 
-Download `jarvis-v1.0.1.apk` from [Releases](../../releases) and open it on your phone (allow "install unknown apps"). Requires Android 8.0+ (API 26).
+Download the APK from [Releases](../../releases) and open it on your phone (allow "install unknown apps"). Requires Android 8.0+ (API 26).
+
+**"App blocked to protect your device"?** Google Play Protect blocks sideloaded apps that ask for SMS or notification access when they're installed from a browser or file manager. Either install over USB with `adb install jarvis.apk`, or temporarily turn off *Play Store → Play Protect → ⚙ → Scan apps with Play Protect*, install, and turn it back on.
 
 ## Build
 

@@ -48,10 +48,10 @@ enum class ItemStatus {
  * Primary bottom-dock HUD sections.
  */
 enum class HudTab(val label: String) {
-  HUD("HUD"),
-  FINANCE("FINANCE"),
-  INTEL("INTEL"),
-  ASK("ASK"),
+  HUD("Home"),
+  FINANCE("Money"),
+  INTEL("Inbox"),
+  ASK("Ask"),
 }
 
 /**
@@ -112,7 +112,7 @@ data class ChatMessage(
 )
 
 /**
- * Calendar schedule event read from CalendarContract or demo dataset.
+ * Calendar schedule event read from CalendarContract.
  */
 data class CalendarEntry(
   val id: String,
@@ -123,7 +123,7 @@ data class CalendarEntry(
 )
 
 /**
- * Recent phone call entry read from CallLog.Calls or demo dataset.
+ * Recent phone call entry read from CallLog.Calls.
  */
 data class CallSummary(
   val id: String,
@@ -189,7 +189,6 @@ data class JarvisSettings(
   val apiKey: String = "",
   val modelId: String = "google/gemini-2.5-flash",
   val userCallsign: String = "Sir",
-  val demoModeEnabled: Boolean = true,
   val voiceEnabled: Boolean = true,
   val redactSensitiveData: Boolean = true,
   val enabledSources: Set<DataSource> = DataSource.entries.toSet(),
@@ -212,7 +211,7 @@ data class JarvisUiState(
   val selectedTab: HudTab = HudTab.HUD,
   val showSettings: Boolean = false,
   val isSyncing: Boolean = false,
-  val syncStatusLine: String = "STANDBY // ALL SYSTEMS NOMINAL",
+  val syncStatusLine: String = "Ready",
   val isSpeaking: Boolean = false,
   val isAskingAi: Boolean = false,
   val settings: JarvisSettings = JarvisSettings(),
@@ -257,7 +256,6 @@ interface JarvisActions {
   fun onTestOpenRouterConnection()
   fun onFetchOpenRouterModels()
   fun onClearAiCache()
-  fun onInjectSimulatedAlert()
   fun onRequestRuntimePermissions()
   fun onOpenNotificationAccessSettings()
   fun onOpenUsageAccessSettings()

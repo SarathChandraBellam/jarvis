@@ -1,7 +1,6 @@
 package com.jarvis.hud.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,16 +21,23 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,14 +47,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.model.ChatMessage
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.ui.components.ArcReactor
-import com.jarvis.hud.ui.components.CutCornerHudShape
-import com.jarvis.hud.ui.components.HudChip
 import com.jarvis.hud.ui.components.HudFormat
+import com.jarvis.hud.ui.components.JCard
+import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import com.jarvis.hud.ui.theme.HudColors
 
 private val SuggestedPrompts = listOf(
@@ -57,6 +65,7 @@ private val SuggestedPrompts = listOf(
   "Brief me",
 )
 
+/** Ask tab: chat with Jarvis about your day. */
 @Composable
 fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
   var input by rememberSaveable { mutableStateOf("") }
@@ -68,25 +77,43 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
       input = ""
     }
   }
-  val itemCount = state.chatMessages.size + if (state.isAskingAi) 1 else 0
+  val extra = if (state.settings.apiKey.isBlank()) 1 else 0
+  val itemCount = extra + state.chatMessages.size + if (state.isAskingAi) 1 else 0
   LaunchedEffect(itemCount) {
     if (itemCount > 0) listState.scrollToItem(itemCount - 1)
   }
-  val pad = screenPadding(contentPadding)
+  val canSend = input.isNotBlank() && !state.isAskingAi
 
   Column(
     Modifier
       .fillMaxSize()
-      .padding(top = pad.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
+      .padding(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
       .consumeWindowInsets(contentPadding)
       .imePadding(),
   ) {
     LazyColumn(
       Modifier.weight(1f).fillMaxWidth(),
       state = listState,
-      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+      if (state.settings.apiKey.isBlank()) {
+        item(key = "nokey") {
+          JCard(color = HudColors.SurfaceHigh, padding = 12.dp) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(Icons.Outlined.Info, null, tint = HudColors.Cyan, modifier = Modifier.size(18.dp))
+              Spacer(Modifier.width(10.dp))
+              Text(
+                "Offline mode: answers come from on-device rules. Add an OpenRouter key for smarter replies.",
+                style = MaterialTheme.typography.bodySmall,
+                color = HudColors.TextDim,
+                modifier = Modifier.weight(1f),
+              )
+            }
+            TextButton(onClick = actions::onOpenSettings, modifier = Modifier.align(Alignment.End)) { Text("Add key") }
+          }
+        }
+      }
       if (state.chatMessages.isEmpty()) {
         item(key = "intro") { AskIntro(state.settings.userCallsign) }
       }
@@ -98,32 +125,47 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
       }
     }
     LazyRow(
-      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      items(SuggestedPrompts) { p -> HudChip(p, false, { send(p) }) }
+      items(SuggestedPrompts) { p ->
+        SuggestionChip(
+          onClick = { send(p) },
+          label = { Text(p) },
+          enabled = !state.isAskingAi,
+          shape = MaterialTheme.shapes.small,
+          colors = SuggestionChipDefaults.suggestionChipColors(containerColor = HudColors.Surface, labelColor = HudColors.Text),
+        )
+      }
     }
     Row(
-      Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 10.dp),
+      Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       OutlinedTextField(
         value = input,
         onValueChange = { input = it },
         modifier = Modifier.weight(1f),
-        placeholder = { Text("Ask J.A.R.V.I.S.…", color = HudColors.TextMuted) },
-        shape = CutCornerHudShape(10.dp),
+        placeholder = { Text("Ask Jarvis anything…") },
+        shape = RoundedCornerShape(24.dp),
         maxLines = 4,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { send(input) }),
-        colors = hudTextFieldColors(),
+        colors = jarvisTextFieldColors(),
       )
-      IconButton(onClick = { send(input) }, enabled = input.isNotBlank() && !state.isAskingAi) {
-        Icon(
-          Icons.AutoMirrored.Outlined.Send,
-          contentDescription = "Send",
-          tint = if (input.isNotBlank() && !state.isAskingAi) HudColors.Cyan else HudColors.TextMuted,
-        )
+      Spacer(Modifier.width(8.dp))
+      FilledIconButton(
+        onClick = { send(input) },
+        enabled = canSend,
+        modifier = Modifier.size(52.dp),
+        colors = IconButtonDefaults.filledIconButtonColors(
+          containerColor = HudColors.Cyan,
+          contentColor = HudColors.OnCyan,
+          disabledContainerColor = HudColors.SurfaceHigh,
+          disabledContentColor = HudColors.TextMuted,
+        ),
+      ) {
+        Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "Send")
       }
     }
   }
@@ -131,15 +173,16 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
 
 @Composable
 private fun AskIntro(callsign: String) {
-  Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-    ArcReactor(size = 96.dp)
-    Spacer(Modifier.size(12.dp))
-    Text("AT YOUR SERVICE, ${callsign.uppercase()}.", style = MaterialTheme.typography.labelLarge, color = HudColors.Cyan)
-    Spacer(Modifier.size(4.dp))
+  Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    ArcReactor(size = 88.dp)
+    Spacer(Modifier.height(16.dp))
+    Text("How can I help, ${callsign.ifBlank { "Sir" }}?", style = MaterialTheme.typography.titleLarge, color = HudColors.Text)
+    Spacer(Modifier.height(6.dp))
     Text(
-      "Ask about spending, bills, deliveries, schedule or messages.",
-      style = MaterialTheme.typography.bodySmall,
+      "Ask about your spending, bills, deliveries, schedule or messages.",
+      style = MaterialTheme.typography.bodyMedium,
       color = HudColors.TextDim,
+      textAlign = TextAlign.Center,
     )
   }
 }
@@ -147,31 +190,30 @@ private fun AskIntro(callsign: String) {
 @Composable
 private fun ChatBubble(m: ChatMessage, onSpeak: () -> Unit) {
   val user = m.isFromUser
-  val accent = if (user) HudColors.Amber else HudColors.Cyan
-  val shape = if (user) CutCornerHudShape(10.dp, 0.dp) else CutCornerHudShape(0.dp, 10.dp)
+  val shape = if (user) {
+    RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp)
+  } else {
+    RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 6.dp, bottomEnd = 20.dp)
+  }
   Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
     Column(horizontalAlignment = if (user) Alignment.End else Alignment.Start, modifier = Modifier.widthIn(max = 320.dp)) {
-      Text(
-        if (user) "YOU · ${HudFormat.time(m.timestamp)}" else "J.A.R.V.I.S. · ${HudFormat.time(m.timestamp)}",
-        style = MaterialTheme.typography.labelSmall,
-        color = accent.copy(alpha = 0.8f),
-      )
-      Spacer(Modifier.size(3.dp))
       Box(
         Modifier
-          .background(accent.copy(alpha = if (user) 0.10f else 0.07f), shape)
-          .border(1.dp, accent.copy(alpha = 0.35f), shape)
-          .padding(horizontal = 12.dp, vertical = 10.dp),
+          .background(if (user) HudColors.Cyan else HudColors.SurfaceHigh, shape)
+          .padding(horizontal = 14.dp, vertical = 10.dp),
       ) {
-        Text(m.content, style = MaterialTheme.typography.bodyMedium, color = HudColors.Text)
+        Text(m.content, style = MaterialTheme.typography.bodyMedium, color = if (user) HudColors.OnCyan else HudColors.Text)
       }
-      if (!user) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          m.modelUsed?.let {
-            Text(it, style = MaterialTheme.typography.labelSmall, color = HudColors.TextMuted, maxLines = 1)
-          }
+      Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
+        Text(
+          HudFormat.time(m.timestamp) + (m.modelUsed?.takeIf { !user }?.let { " · $it" } ?: ""),
+          style = MaterialTheme.typography.labelSmall,
+          color = HudColors.TextMuted,
+          maxLines = 1,
+        )
+        if (!user) {
           IconButton(onClick = onSpeak, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.AutoMirrored.Outlined.VolumeUp, "Speak", tint = HudColors.Cyan, modifier = Modifier.size(16.dp))
+            Icon(Icons.AutoMirrored.Outlined.VolumeUp, "Read aloud", tint = HudColors.TextDim, modifier = Modifier.size(16.dp))
           }
         }
       }
@@ -181,11 +223,12 @@ private fun ChatBubble(m: ChatMessage, onSpeak: () -> Unit) {
 
 @Composable
 private fun TypingIndicator() {
-  Row(verticalAlignment = Alignment.CenterVertically) {
-    Text("J.A.R.V.I.S. ANALYZING", style = MaterialTheme.typography.labelSmall, color = HudColors.Cyan)
-    Spacer(Modifier.width(8.dp))
-    repeat(3) {
-      Box(Modifier.padding(horizontal = 2.dp).size(6.dp).background(HudColors.Cyan, CircleShape))
+  Row(
+    Modifier.background(HudColors.SurfaceHigh, RoundedCornerShape(20.dp)).padding(horizontal = 16.dp, vertical = 14.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    repeat(3) { i ->
+      Box(Modifier.padding(horizontal = 3.dp).size(7.dp).background(HudColors.TextDim.copy(alpha = 0.5f + i * 0.2f), CircleShape))
     }
   }
 }
