@@ -94,7 +94,7 @@ fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Pa
             color = HudColors.TextMuted,
           )
         }
-        items(filtered, key = { it.id }) { ItemCard(it, actions::onMarkItemStatus, Modifier.animateItem()) }
+        items(filtered, key = { it.id }) { ItemCard(it, actions::onMarkItemStatus) }
       }
     }
   }

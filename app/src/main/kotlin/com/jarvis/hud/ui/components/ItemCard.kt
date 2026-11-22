@@ -106,10 +106,10 @@ fun ItemCard(
                       v > threshold -> onStatus(item.id, ItemStatus.DONE)
                       v < -threshold -> onStatus(item.id, ItemStatus.DISMISSED)
                     }
-                    offsetX.animateTo(0f)
+                    offsetX.snapTo(0f)
                   }
                 },
-                onDragCancel = { scope.launch { offsetX.animateTo(0f) } },
+                onDragCancel = { scope.launch { offsetX.snapTo(0f) } },
               ) { change, amount ->
                 change.consume()
                 scope.launch { offsetX.snapTo(offsetX.value + amount) }

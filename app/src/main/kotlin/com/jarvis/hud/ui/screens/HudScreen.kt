@@ -1,6 +1,5 @@
 package com.jarvis.hud.ui.screens
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -208,13 +207,12 @@ private fun BriefingPanel(state: JarvisUiState, actions: JarvisActions) {
     title = "Daily Briefing",
     trailing = {
       IconButton(onClick = actions::onToggleSpeakBriefing, enabled = b != null, modifier = Modifier.size(32.dp)) {
-        AnimatedContent(state.isSpeaking, label = "speakIcon") { speaking ->
-          Icon(
-            if (speaking) Icons.Outlined.Stop else Icons.AutoMirrored.Outlined.VolumeUp,
-            contentDescription = if (speaking) "Stop speaking" else "Speak briefing",
-            tint = if (speaking) HudColors.Amber else HudColors.Cyan,
-          )
-        }
+        val speaking = state.isSpeaking
+        Icon(
+          if (speaking) Icons.Outlined.Stop else Icons.AutoMirrored.Outlined.VolumeUp,
+          contentDescription = if (speaking) "Stop speaking" else "Speak briefing",
+          tint = if (speaking) HudColors.Amber else HudColors.Cyan,
+        )
       }
     },
   ) {

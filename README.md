@@ -9,7 +9,7 @@ An on-device, Iron Man–style HUD for Android (Kotlin + Jetpack Compose). It re
 
 ## Install
 
-Download `jarvis-v1.0.0.apk` from [Releases](../../releases) and open it on your phone (allow "install unknown apps"). Requires Android 8.0+ (API 26).
+Download `jarvis-v1.0.1.apk` from [Releases](../../releases) and open it on your phone (allow "install unknown apps"). Requires Android 8.0+ (API 26).
 
 ## Build
 

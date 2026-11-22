@@ -1,11 +1,5 @@
 package com.jarvis.hud.ui.screens
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.StartOffset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +39,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.model.ChatMessage
@@ -77,7 +70,7 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
   }
   val itemCount = state.chatMessages.size + if (state.isAskingAi) 1 else 0
   LaunchedEffect(itemCount) {
-    if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
+    if (itemCount > 0) listState.scrollToItem(itemCount - 1)
   }
   val pad = screenPadding(contentPadding)
 
@@ -188,17 +181,11 @@ private fun ChatBubble(m: ChatMessage, onSpeak: () -> Unit) {
 
 @Composable
 private fun TypingIndicator() {
-  val t = rememberInfiniteTransition(label = "typing")
   Row(verticalAlignment = Alignment.CenterVertically) {
     Text("J.A.R.V.I.S. ANALYZING", style = MaterialTheme.typography.labelSmall, color = HudColors.Cyan)
     Spacer(Modifier.width(8.dp))
-    repeat(3) { i ->
-      val a by t.animateFloat(
-        0.2f, 1f,
-        infiniteRepeatable(tween(450), RepeatMode.Reverse, StartOffset(i * 150)),
-        label = "dot$i",
-      )
-      Box(Modifier.padding(horizontal = 2.dp).size(6.dp).alpha(a).background(HudColors.Cyan, CircleShape))
+    repeat(3) {
+      Box(Modifier.padding(horizontal = 2.dp).size(6.dp).background(HudColors.Cyan, CircleShape))
     }
   }
 }

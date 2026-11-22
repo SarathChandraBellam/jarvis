@@ -1,16 +1,5 @@
 package com.jarvis.hud.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -111,30 +100,15 @@ fun JarvisApp(state: JarvisUiState, actions: JarvisActions) {
           }
         },
       ) { inner ->
-        AnimatedContent(
-          targetState = state.selectedTab,
-          transitionSpec = {
-            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-            (fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 6 * dir }) togetherWith
-              (fadeOut(tween(160)) + slideOutHorizontally(tween(260)) { -it / 6 * dir })
-          },
-          label = "tab",
-          modifier = Modifier.fillMaxSize(),
-        ) { tab ->
-          when (tab) {
-            HudTab.HUD -> HudScreen(state, actions, inner)
-            HudTab.FINANCE -> FinanceScreen(state, actions, inner)
-            HudTab.INTEL -> IntelScreen(state, actions, inner)
-            HudTab.ASK -> AskScreen(state, actions, inner)
-          }
+        when (state.selectedTab) {
+          HudTab.HUD -> HudScreen(state, actions, inner)
+          HudTab.FINANCE -> FinanceScreen(state, actions, inner)
+          HudTab.INTEL -> IntelScreen(state, actions, inner)
+          HudTab.ASK -> AskScreen(state, actions, inner)
         }
       }
 
-      AnimatedVisibility(
-        visible = state.showSettings,
-        enter = fadeIn() + slideInVertically { it / 8 },
-        exit = fadeOut() + slideOutVertically { it / 8 },
-      ) {
+      if (state.showSettings) {
         SettingsScreen(state, actions)
       }
     }
@@ -206,8 +180,8 @@ private fun HudDock(selected: HudTab, onSelect: (HudTab) -> Unit) {
     ) {
       HudTab.entries.forEach { tab ->
         val sel = tab == selected
-        val bg by animateColorAsState(if (sel) HudColors.Cyan.copy(alpha = 0.16f) else Color.Transparent, label = "dockBg")
-        val fg by animateColorAsState(if (sel) HudColors.Cyan else HudColors.TextMuted, label = "dockFg")
+        val bg = if (sel) HudColors.Cyan.copy(alpha = 0.16f) else Color.Transparent
+        val fg = if (sel) HudColors.Cyan else HudColors.TextMuted
         Column(
           Modifier
             .weight(1f)

@@ -1,15 +1,8 @@
 package com.jarvis.hud.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -26,8 +19,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Animated arc reactor: glowing core, segmented counter-rotating rings and tick dial.
- * Pulses and spins faster while [active] (syncing or speaking).
+ * Static arc reactor: glowing core, segmented rings and tick dial.
+ * Glows brighter while [active] (syncing or speaking). Not animated, to keep CPU/GPU idle.
  */
 @Composable
 fun ArcReactor(
@@ -36,23 +29,10 @@ fun ArcReactor(
   active: Boolean = false,
   color: Color = HudColors.Cyan,
 ) {
-  val transition = rememberInfiniteTransition(label = "arc")
-  val speed = if (active) 0.35f else 1f
-  val spin by transition.animateFloat(
-    0f, 360f,
-    infiniteRepeatable(tween((14000 * speed).toInt(), easing = LinearEasing)),
-    label = "spin",
-  )
-  val counter by transition.animateFloat(
-    360f, 0f,
-    infiniteRepeatable(tween((9000 * speed).toInt(), easing = LinearEasing)),
-    label = "counter",
-  )
-  val pulse by transition.animateFloat(
-    0.55f, 1f,
-    infiniteRepeatable(tween(if (active) 420 else 1800), RepeatMode.Reverse),
-    label = "pulse",
-  )
+  // Static drawing (no animation): rings sit at fixed angles; glows brighter while [active].
+  val spin = 0f
+  val counter = 15f
+  val pulse = if (active) 1f else 0.75f
 
   Canvas(modifier.size(size)) {
     val c = center
