@@ -36,6 +36,8 @@ object PreviewFixtures {
     override fun onOpenNotificationAccessSettings() {}
     override fun onOpenUsageAccessSettings() {}
     override fun onDismissError() {}
+    override fun onOpenItem(itemId: String?) {}
+    override fun onClearChat() {}
   }
 
   fun state(tab: HudTab = HudTab.HUD, now: Long = System.currentTimeMillis()): JarvisUiState {
@@ -69,7 +71,7 @@ object PreviewFixtures {
     return JarvisUiState(
       selectedTab = tab,
       syncStatusLine = "Up to date · 12 new items",
-      settings = JarvisSettings(userCallsign = "Tony", apiKey = "sk-or-v1-demo"),
+      settings = JarvisSettings(userCallsign = "Tony", apiKey = "sk-or-v1-preview", onboardingDone = true, monthlyBudget = 60000.0),
       permissions = PermissionStatus(true, false, true, true, false),
       briefing = DailyBriefing(
         dateKey = "2026-11-22",

@@ -12,6 +12,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.testTag
+import com.jarvis.hud.ui.components.Refreshable
+import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,20 +54,40 @@ fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Pa
   // null = all. Stored by name so it survives config changes.
   var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
   var showArchived by rememberSaveable { mutableStateOf(false) }
+  var query by rememberSaveable { mutableStateOf("") }
   val selected = selectedName?.let { n -> IntelCategory.entries.firstOrNull { it.name == n } }
 
   val visibleBase = remember(state.items, showArchived) {
     state.items.filter { showArchived || it.status == ItemStatus.ACTIVE }
   }
   val counts = remember(visibleBase) { visibleBase.groupingBy { it.category }.eachCount() }
-  val filtered = remember(visibleBase, selected) {
+  val filtered = remember(visibleBase, selected, query) {
+    val q = query.trim()
     visibleBase
       .filter { selected == null || it.category == selected }
+      .filter {
+        q.isEmpty() || it.title.contains(q, true) || it.summary.contains(q, true) ||
+          (it.merchant?.contains(q, true) ?: false)
+      }
       .sortedWith(compareBy({ it.status.ordinal }, { it.priority.ordinal }, { -it.timestamp }))
   }
   val pad = screenPadding(contentPadding)
 
   Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding())) {
+    OutlinedTextField(
+      value = query,
+      onValueChange = { query = it },
+      placeholder = { Text("Search inbox") },
+      leadingIcon = { Icon(Icons.Outlined.Search, null) },
+      trailingIcon = if (query.isNotEmpty()) {
+        { IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "Clear search") } }
+      } else null,
+      singleLine = true,
+      shape = RoundedCornerShape(28.dp),
+      colors = jarvisTextFieldColors(),
+      keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 10.dp).testTag("inboxSearch"),
+    )
     LazyRow(
       contentPadding = PaddingValues(horizontal = 16.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -74,16 +105,21 @@ fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Pa
         Chip("Show completed", showArchived, HudColors.TextDim) { showArchived = !showArchived }
       }
     }
+    Refreshable(state.isSyncing, actions::onScanAndOrganize, Modifier.fillMaxSize()) {
     LazyColumn(
-      Modifier.fillMaxSize(),
+      Modifier.fillMaxSize().testTag("screen-inbox"),
       contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = pad.calculateBottomPadding()),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       if (filtered.isEmpty()) {
         item(key = "empty") {
           EmptyState(
-            selected?.icon() ?: Icons.Outlined.Inventory2,
-            if (selected == null) "Inbox zero" else "Nothing in ${selected.label}",
+            if (query.isNotBlank()) Icons.Outlined.Search else selected?.icon() ?: Icons.Outlined.Inventory2,
+            when {
+              query.isNotBlank() -> "No results for \"${query.trim()}\""
+              selected == null -> "Inbox zero"
+              else -> "Nothing in ${selected.label}"
+            },
             if (state.isSyncing) "Checking your messages and notifications…"
             else "New bank alerts, bills, deliveries and messages will appear here.",
           ) {
@@ -102,8 +138,9 @@ fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Pa
             modifier = Modifier.padding(start = 4.dp),
           )
         }
-        items(filtered, key = { it.id }) { ItemCard(it, actions::onMarkItemStatus) }
+        items(filtered, key = { it.id }) { ItemCard(it, actions::onMarkItemStatus, onClick = { actions.onOpenItem(it.id) }) }
       }
+    }
     }
   }
 }

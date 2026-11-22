@@ -54,6 +54,8 @@ android {
     shaders = false
   }
 
+  // Robolectric needs merged resources to run Compose UI tests on the JVM.
+  testOptions { unitTests.isIncludeAndroidResources = true }
   packaging {
     resources {
       excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -97,6 +99,9 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.org.json)
+  testImplementation(libs.robolectric)
+  testImplementation(libs.androidx.test.core)
+  testImplementation(libs.androidx.compose.ui.test.junit4)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

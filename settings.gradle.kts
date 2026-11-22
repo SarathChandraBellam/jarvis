@@ -22,6 +22,8 @@ dependencyResolutionManagement {
         includeGroupByRegex("com\\.google.*")
       }
     }
+    // Google's mirror of Maven Central first: repo.maven.apache.org often rate-limits (HTTP 429) CI machines.
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
   }
 }

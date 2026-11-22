@@ -6,6 +6,10 @@ An on-device personal assistant for Android (Kotlin + Jetpack Compose). It reads
 - **AI:** OpenRouter (bring your own key, stored encrypted on device) or a fully local parser
 - **Privacy:** optional redaction of numbers, account IDs etc. before anything is sent to the AI
 - **Settings save automatically** — there is no Save button
+- **Welcome screen** on first launch to set your name and grant access
+- **Inbox search**, pull-to-refresh, and a details sheet (tap any item: mark done, dismiss, share)
+- **Monthly budget** tracking on the Money tab
+- **Tablet / landscape layout** with a side navigation rail
 
 ## Install
 
@@ -18,7 +22,7 @@ Download the APK from [Releases](../../releases) and open it on your phone (allo
 Requires JDK 17 and Android SDK platform 37.
 
 ```sh
-./gradlew testDebugUnitTest   # unit tests (JVM, no emulator)
+./gradlew testDebugUnitTest   # unit + end-to-end UI tests (Robolectric, no emulator needed)
 ./gradlew assembleDebug       # debug APK
 ./gradlew assembleRelease     # release APK
 ```
@@ -26,3 +30,14 @@ Requires JDK 17 and Android SDK platform 37.
 Release signing is read from a properties file outside the repo
 (`~/.android-keystores/jarvis-keystore.properties`, or `-PjarvisKeystoreProps=<path>`)
 with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Without it, the release APK is unsigned.
+
+### Tests
+
+`testDebugUnitTest` runs everything on the JVM:
+
+- **Unit tests** for the parser, redactor, AI JSON handling, storage and ViewModel.
+- **End-to-end UI tests** (`app/src/test/.../e2e`) that drive the real Compose UI and ViewModel: onboarding, every tab, settings auto-save (including leaving the screen right away), search, swipe/done/restore, the details sheet, chat and error snackbars. `MainActivitySmokeTest` boots the real app cold.
+- **Settings persistence tests** that check every setting survives an app restart.
+- **Screenshot tests** that render each screen to `app/build/screenshots/`.
+
+GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. To sign release builds in CI, add the `JARVIS_KEYSTORE_B64`, `JARVIS_STORE_PASSWORD`, `JARVIS_KEY_ALIAS` and `JARVIS_KEY_PASSWORD` repository secrets.

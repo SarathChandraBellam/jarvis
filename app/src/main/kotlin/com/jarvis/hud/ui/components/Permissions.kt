@@ -37,7 +37,7 @@ private fun accessList(
   onOpenNotificationAccess: () -> Unit,
   onOpenUsageAccess: () -> Unit,
 ) = listOf(
-  Access("SMS", "Bank alerts, bills and OTP-free summaries", Icons.Outlined.Sms, p.smsGranted, onRequestRuntime),
+  Access("SMS", "Bank alerts, bills and payments", Icons.Outlined.Sms, p.smsGranted, onRequestRuntime),
   Access("Notifications", "Deliveries, messages and app alerts", Icons.Outlined.Notifications, p.notificationAccessGranted, onOpenNotificationAccess),
   Access("Calendar", "Today's schedule", Icons.Outlined.CalendarMonth, p.calendarGranted, onRequestRuntime),
   Access("Call log", "Recent and missed calls", Icons.Outlined.Call, p.callLogGranted, onRequestRuntime),

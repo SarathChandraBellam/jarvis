@@ -193,6 +193,10 @@ data class JarvisSettings(
   val redactSensitiveData: Boolean = true,
   val enabledSources: Set<DataSource> = DataSource.entries.toSet(),
   val aiShareSources: Set<DataSource> = DataSource.entries.toSet(),
+  /** False until the user finishes (or skips) the welcome screen. */
+  val onboardingDone: Boolean = false,
+  /** Monthly spending budget in ₹; 0 = no budget. */
+  val monthlyBudget: Double = 0.0,
 )
 
 /**
@@ -238,7 +242,11 @@ data class JarvisUiState(
   val isLoadingModels: Boolean = false,
   val connectionTestResult: ConnectionTestResult? = null,
   val lastError: String? = null,
-)
+  /** Item shown in the details sheet, if any. */
+  val openItemId: String? = null,
+) {
+  val openItem: OrganizedItem? get() = openItemId?.let { id -> items.firstOrNull { it.id == id } }
+}
 
 /**
  * UI callbacks wired to JarvisViewModel and MainActivity permission launchers.
@@ -260,4 +268,6 @@ interface JarvisActions {
   fun onOpenNotificationAccessSettings()
   fun onOpenUsageAccessSettings()
   fun onDismissError()
+  fun onOpenItem(itemId: String?)
+  fun onClearChat()
 }

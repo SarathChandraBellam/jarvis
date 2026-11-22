@@ -39,15 +39,19 @@ import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.ui.components.EmptyLine
 import com.jarvis.hud.ui.components.EmptyState
 import com.jarvis.hud.ui.components.HudFormat
+import com.jarvis.hud.ui.components.startOfMonth
 import com.jarvis.hud.ui.components.ItemCard
 import com.jarvis.hud.ui.components.JCard
 import com.jarvis.hud.ui.components.Meter
+import com.jarvis.hud.ui.components.Refreshable
+import androidx.compose.ui.platform.testTag
 import com.jarvis.hud.ui.components.SectionHeader
 import com.jarvis.hud.ui.theme.HudColors
 import kotlin.math.abs
 
 private data class FinanceSummary(
   val todayDebit: Double,
+  val monthDebit: Double,
   val weekDebit: Double,
   val weekCredit: Double,
   /** Oldest → today, 7 entries: (day start millis, debit total). */
@@ -81,6 +85,7 @@ private fun summarize(items: List<OrganizedItem>, now: Long): FinanceSummary {
     .sortedWith(compareBy(nullsLast()) { it.dueDate })
   return FinanceSummary(
     todayDebit = sum(today, false),
+    monthDebit = sum(HudFormat.startOfMonth(now), false),
     weekDebit = sum(weekStart, false),
     weekCredit = sum(weekStart, true),
     perDay = perDay,
@@ -94,8 +99,9 @@ private fun summarize(items: List<OrganizedItem>, now: Long): FinanceSummary {
 @Composable
 fun FinanceScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
   val s = remember(state.items) { summarize(state.items, System.currentTimeMillis()) }
+  Refreshable(state.isSyncing, actions::onScanAndOrganize, Modifier.fillMaxSize()) {
   LazyColumn(
-    Modifier.fillMaxSize(),
+    Modifier.fillMaxSize().testTag("screen-money"),
     contentPadding = screenPadding(contentPadding),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
@@ -120,6 +126,9 @@ fun FinanceScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: 
         )
       }
     }
+    if (state.settings.monthlyBudget > 0) {
+      item(key = "budget") { BudgetCard(s.monthDebit, state.settings.monthlyBudget) }
+    }
     item(key = "chart") {
       SectionHeader("Daily spending")
       Spacer(Modifier.height(8.dp))
@@ -131,7 +140,7 @@ fun FinanceScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: 
     if (s.bills.isEmpty()) {
       item(key = "billsEmpty") { JCard { EmptyLine("No bills pending.") } }
     } else {
-      items(s.bills, key = { "bill-" + it.id }) { ItemCard(it, actions::onMarkItemStatus) }
+      items(s.bills, key = { "bill-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, onClick = { actions.onOpenItem(it.id) }) }
     }
     item(key = "merchants") {
       SectionHeader("Where it went")
@@ -163,7 +172,8 @@ fun FinanceScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: 
         }
       }
     }
-    items(s.transactions, key = { "tx-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, compact = true) }
+    items(s.transactions, key = { "tx-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, compact = true, onClick = { actions.onOpenItem(it.id) }) }
+  }
   }
 }
 
@@ -229,5 +239,31 @@ private fun SpendChart(perDay: List<Pair<Long, Double>>) {
         )
       }
     }
+  }
+}
+
+@Composable
+private fun BudgetCard(spent: Double, budget: Double) {
+  val frac = (spent / budget).toFloat()
+  val color = when {
+    frac >= 1f -> HudColors.Red
+    frac >= 0.8f -> HudColors.Amber
+    else -> HudColors.Green
+  }
+  val left = budget - spent
+  JCard(Modifier.testTag("budgetCard")) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Text("Monthly budget", style = MaterialTheme.typography.titleSmall, color = HudColors.Text, modifier = Modifier.weight(1f))
+      Text("${(frac * 100).toInt().coerceAtMost(999)}%", style = MaterialTheme.typography.labelLarge, color = color)
+    }
+    Spacer(Modifier.height(10.dp))
+    Meter(frac, color, height = 10.dp)
+    Spacer(Modifier.height(8.dp))
+    Text(
+      if (left >= 0) "${HudFormat.money(left)} left of ${HudFormat.money(budget)} this month"
+      else "${HudFormat.money(-left)} over your ${HudFormat.money(budget)} budget",
+      style = MaterialTheme.typography.bodySmall,
+      color = if (left >= 0) HudColors.TextDim else HudColors.Red,
+    )
   }
 }

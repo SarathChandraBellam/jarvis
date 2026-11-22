@@ -2,6 +2,7 @@ package com.jarvis.hud.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -57,6 +59,7 @@ fun ItemCard(
   onStatus: (String, ItemStatus) -> Unit,
   modifier: Modifier = Modifier,
   compact: Boolean = false,
+  onClick: (() -> Unit)? = null,
 ) {
   val accent = item.category.accent()
   val active = item.status == ItemStatus.ACTIVE
@@ -105,6 +108,8 @@ fun ItemCard(
             }
           } else Modifier,
         )
+        .then(if (onClick != null) Modifier.clickable(onClickLabel = "Open details", onClick = onClick) else Modifier)
+        .testTag("item-${item.id}")
         .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = if (compact) 14.dp else 6.dp),
     ) {
       Row(verticalAlignment = Alignment.Top) {

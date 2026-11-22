@@ -80,9 +80,17 @@ class JarvisViewModel(
 
   // ---------------------------------------------------------------- refresh helpers
 
+  private var permissionsLoaded = false
+
+  /** Re-reads permissions; if the user just granted something new, scans so the data shows up. */
   fun refreshPermissions() {
     runCatching { c.permissions.current() }
-      .onSuccess { p -> _uiState.update { it.copy(permissions = p) } }
+      .onSuccess { p ->
+        val before = _uiState.value.permissions.grantedCount
+        _uiState.update { it.copy(permissions = p) }
+        if (permissionsLoaded && p.grantedCount > before) onScanAndOrganize()
+        permissionsLoaded = true
+      }
       .onFailure { e -> setError(e) }
   }
 
@@ -101,6 +109,10 @@ class JarvisViewModel(
   override fun onCloseSettings() = _uiState.update { it.copy(showSettings = false) }
 
   override fun onDismissError() = _uiState.update { it.copy(lastError = null) }
+
+  override fun onOpenItem(itemId: String?) = _uiState.update { it.copy(openItemId = itemId) }
+
+  override fun onClearChat() = _uiState.update { it.copy(chatMessages = emptyList()) }
 
   // ---------------------------------------------------------------- scan pipeline
 
@@ -207,6 +219,7 @@ class JarvisViewModel(
   // ---------------------------------------------------------------- items
 
   override fun onMarkItemStatus(itemId: String, status: ItemStatus) {
+    if (status != ItemStatus.ACTIVE) _uiState.update { if (it.openItemId == itemId) it.copy(openItemId = null) else it }
     viewModelScope.launch { safely { c.store.setStatus(itemId, status) } }
   }
 
@@ -245,7 +258,9 @@ class JarvisViewModel(
       if (!ok) {
         // Show what is really persisted, not the draft that failed to save.
         _uiState.update { it.copy(settings = c.settingsRepo.settings.value) }
-      } else if (previous.enabledSources != settings.enabledSources) {
+      } else if (previous.enabledSources != settings.enabledSources ||
+        (!previous.onboardingDone && settings.onboardingDone)
+      ) {
         restartScan()
       }
     }

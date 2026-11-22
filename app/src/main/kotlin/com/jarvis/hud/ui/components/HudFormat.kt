@@ -129,3 +129,10 @@ fun Priority.displayLabel(): String = when (this) {
   Priority.NORMAL -> "Normal"
   Priority.LOW -> "Low"
 }
+
+/** Midnight on the 1st of the month containing [now]. */
+fun HudFormat.startOfMonth(now: Long = System.currentTimeMillis()): Long =
+  Calendar.getInstance().apply {
+    timeInMillis = HudFormat.startOfDay(now)
+    set(Calendar.DAY_OF_MONTH, 1)
+  }.timeInMillis

@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -145,13 +148,15 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
       )
     },
   ) { inner ->
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.TopCenter) {
     Column(
       Modifier
+        .widthIn(max = 720.dp)
         .fillMaxSize()
-        .padding(inner)
         .imePadding()
         .verticalScroll(rememberScrollState())
-        .padding(horizontal = 16.dp),
+        .padding(horizontal = 16.dp)
+        .testTag("settings"),
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       SectionHeader("Profile")
@@ -164,7 +169,7 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
           singleLine = true,
           shape = MaterialTheme.shapes.medium,
           colors = jarvisTextFieldColors(),
-          modifier = Modifier.fillMaxWidth(),
+          modifier = Modifier.fillMaxWidth().testTag("callsignField"),
         )
       }
 
@@ -214,15 +219,19 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
         )
       }
 
+      SectionHeader("Money")
+      BudgetCard(draft.monthlyBudget) { draft = draft.copy(monthlyBudget = it) }
+
       SectionHeader("Storage")
       ClearCacheCard(actions::onClearAiCache)
 
       Text(
-        "Changes save automatically.",
+        "Changes save automatically · Jarvis ${appVersion()}",
         style = MaterialTheme.typography.bodySmall,
         color = HudColors.TextMuted,
         modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
       )
+    }
     }
   }
 }
@@ -273,7 +282,7 @@ private fun AiCard(
       supportingText = { Text("Stored encrypted on this phone") },
       shape = MaterialTheme.shapes.medium,
       colors = jarvisTextFieldColors(),
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier.fillMaxWidth().testTag("apiKeyField"),
     )
     Spacer(Modifier.height(4.dp))
     OutlinedTextField(
@@ -468,5 +477,37 @@ private fun ClearCacheCard(onClear: () -> Unit) {
       dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
       containerColor = HudColors.SurfaceHigh,
     )
+  }
+}
+
+@Composable
+private fun BudgetCard(budget: Double, onChange: (Double) -> Unit) {
+  var text by remember { mutableStateOf(if (budget > 0) budget.toLong().toString() else "") }
+  JCard {
+    OutlinedTextField(
+      value = text,
+      onValueChange = { v ->
+        val digits = v.filter { it.isDigit() }.take(9)
+        text = digits
+        onChange(digits.toDoubleOrNull() ?: 0.0)
+      },
+      label = { Text("Monthly budget") },
+      placeholder = { Text("No budget") },
+      prefix = { Text("₹") },
+      singleLine = true,
+      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+      supportingText = { Text("Shows how much you have left this month on the Money tab") },
+      shape = MaterialTheme.shapes.medium,
+      colors = jarvisTextFieldColors(),
+      modifier = Modifier.fillMaxWidth().testTag("budgetField"),
+    )
+  }
+}
+
+@Composable
+private fun appVersion(): String {
+  val context = LocalContext.current
+  return remember {
+    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
   }
 }

@@ -26,7 +26,10 @@ import kotlinx.coroutines.withContext
  * AES/GCM/NoPadding using a non-exportable Android Keystore key (alias [KEY_ALIAS]); the
  * ciphertext and IV are stored base64-encoded. Settings load synchronously at construction.
  */
-class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
+class SharedPrefsSettingsRepository(
+  context: Context,
+  private val cipher: SecretCipher = KeystoreCipher(),
+) : SettingsRepository {
 
   private val prefs: SharedPreferences =
     context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -48,16 +51,18 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
         .putBoolean(K_REDACT, clean.redactSensitiveData)
         .putStringSet(K_ENABLED, clean.enabledSources.map { it.name }.toSet())
         .putStringSet(K_AI_SHARE, clean.aiShareSources.map { it.name }.toSet())
+        .putBoolean(K_ONBOARDED, clean.onboardingDone)
+        .putFloat(K_BUDGET, clean.monthlyBudget.toFloat())
       val key = clean.apiKey
       if (key.isEmpty()) {
         editor.remove(K_KEY_CT).remove(K_KEY_IV)
       } else if (key != state.value.apiKey || !prefs.contains(K_KEY_CT)) {
         // Fail loudly instead of silently dropping the key (it would vanish on next launch).
         val (ct, iv) = try {
-          encrypt(key)
+          cipher.encrypt(key)
         } catch (e: Exception) {
-          resetKeystoreKey()
-          runCatching { encrypt(key) }.getOrElse {
+          cipher.reset()
+          runCatching { cipher.encrypt(key) }.getOrElse {
             throw IllegalStateException("Couldn't securely store the API key on this device (${e.javaClass.simpleName}).", it)
           }
         }
@@ -66,11 +71,6 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
       check(editor.commit()) { "Couldn't write settings to storage." }
     }
     state.value = clean
-  }
-
-  /** A corrupted/invalidated keystore entry would make every encrypt fail; recreate it once. */
-  private fun resetKeystoreKey() {
-    runCatching { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS) }
   }
 
   private fun load(): JarvisSettings {
@@ -84,6 +84,9 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
         redactSensitiveData = prefs.getBoolean(K_REDACT, defaults.redactSensitiveData),
         enabledSources = prefs.getStringSet(K_ENABLED, null)?.let(::toSources) ?: defaults.enabledSources,
         aiShareSources = prefs.getStringSet(K_AI_SHARE, null)?.let(::toSources) ?: defaults.aiShareSources,
+        // Users upgrading from 1.0 already set the app up; don't show them the welcome screen.
+        onboardingDone = prefs.getBoolean(K_ONBOARDED, prefs.contains(K_CALLSIGN)),
+        monthlyBudget = prefs.getFloat(K_BUDGET, 0f).toDouble().coerceAtLeast(0.0),
       )
     } catch (_: Exception) {
       defaults
@@ -96,9 +99,37 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
   private fun loadApiKey(): String {
     val ct = prefs.getString(K_KEY_CT, null) ?: return ""
     val iv = prefs.getString(K_KEY_IV, null) ?: return ""
-    return runCatching { decrypt(ct, iv) }.getOrDefault("")
+    return runCatching { cipher.decrypt(ct, iv) }.getOrDefault("")
   }
 
+  companion object {
+    const val PREFS_NAME = "jarvis_settings"
+
+    private const val K_KEY_CT = "api_key_ct"
+    private const val K_KEY_IV = "api_key_iv"
+    private const val K_MODEL = "model_id"
+    private const val K_CALLSIGN = "callsign"
+    private const val K_LEGACY_DEMO = "demo_mode"
+    private const val K_VOICE = "voice"
+    private const val K_REDACT = "redact"
+    private const val K_ENABLED = "enabled_sources"
+    private const val K_AI_SHARE = "ai_share_sources"
+    private const val K_ONBOARDED = "onboarding_done"
+    private const val K_BUDGET = "monthly_budget"
+  }
+}
+
+/** Encrypts small secrets (the API key). Abstracted so tests can run without the Android Keystore. */
+interface SecretCipher {
+  /** @return (ciphertext base64, iv base64) */
+  fun encrypt(plain: String): Pair<String, String>
+  fun decrypt(ctB64: String, ivB64: String): String
+  /** Drops the underlying key (e.g. after it was invalidated). */
+  fun reset()
+}
+
+/** AES/GCM with a non-exportable Android Keystore key. */
+class KeystoreCipher : SecretCipher {
   private fun secretKey(): SecretKey {
     val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     (ks.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
@@ -113,8 +144,7 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
     return generator.generateKey()
   }
 
-  /** @return (ciphertext base64, iv base64) */
-  private fun encrypt(plain: String): Pair<String, String> {
+  override fun encrypt(plain: String): Pair<String, String> {
     val cipher = Cipher.getInstance(TRANSFORMATION)
     cipher.init(Cipher.ENCRYPT_MODE, secretKey())
     val ct = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
@@ -122,28 +152,21 @@ class SharedPrefsSettingsRepository(context: Context) : SettingsRepository {
     return b64.encodeToString(ct) to b64.encodeToString(cipher.iv)
   }
 
-  private fun decrypt(ctB64: String, ivB64: String): String {
+  override fun decrypt(ctB64: String, ivB64: String): String {
     val dec = Base64.getDecoder()
     val cipher = Cipher.getInstance(TRANSFORMATION)
     cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_BITS, dec.decode(ivB64)))
     return String(cipher.doFinal(dec.decode(ctB64)), Charsets.UTF_8)
   }
 
+  override fun reset() {
+    runCatching { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS) }
+  }
+
   companion object {
-    const val PREFS_NAME = "jarvis_settings"
     const val KEY_ALIAS = "jarvis_api_key"
     private const val ANDROID_KEYSTORE = "AndroidKeyStore"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_TAG_BITS = 128
-
-    private const val K_KEY_CT = "api_key_ct"
-    private const val K_KEY_IV = "api_key_iv"
-    private const val K_MODEL = "model_id"
-    private const val K_CALLSIGN = "callsign"
-    private const val K_LEGACY_DEMO = "demo_mode"
-    private const val K_VOICE = "voice"
-    private const val K_REDACT = "redact"
-    private const val K_ENABLED = "enabled_sources"
-    private const val K_AI_SHARE = "ai_share_sources"
   }
 }

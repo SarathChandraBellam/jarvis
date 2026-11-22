@@ -1,6 +1,20 @@
 package com.jarvis.hud.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.ui.platform.testTag
+import com.jarvis.hud.ui.components.ItemDetailSheet
+import com.jarvis.hud.ui.screens.OnboardingScreen
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -71,23 +85,84 @@ fun JarvisApp(state: JarvisUiState, actions: JarvisActions) {
       if (r == SnackbarResult.ActionPerformed || r == SnackbarResult.Dismissed) actions.onDismissError()
     }
 
-    if (state.showSettings) {
-      SettingsScreen(state, actions, snackbar)
-    } else {
+    Box(Modifier.fillMaxSize().background(HudColors.Background)) {
+      when {
+        !state.settings.onboardingDone -> OnboardingScreen(state, actions)
+        state.showSettings -> SettingsScreen(state, actions, snackbar)
+        else -> MainShell(state, actions, snackbar)
+      }
+    }
+    state.openItem?.let { item ->
+      ItemDetailSheet(item, actions::onMarkItemStatus, onDismiss = { actions.onOpenItem(null) })
+    }
+  }
+}
+
+/** Tabs + top bar. Phones get a bottom bar; tablets and landscape get a side rail and centered content. */
+@Composable
+private fun MainShell(state: JarvisUiState, actions: JarvisActions, snackbar: SnackbarHostState) {
+  BoxWithConstraints(Modifier.fillMaxSize()) {
+    val wide = maxWidth >= 600.dp
+    Row(Modifier.fillMaxSize()) {
+      if (wide) MainNavRail(state, actions::onSelectTab)
       Scaffold(
         containerColor = HudColors.Background,
         topBar = { MainTopBar(state, actions) },
-        bottomBar = { MainNavBar(state, actions::onSelectTab) },
+        bottomBar = { if (!wide) MainNavBar(state, actions::onSelectTab) },
         snackbarHost = { SnackbarHost(snackbar) },
+        modifier = Modifier.weight(1f),
       ) { inner ->
-        when (state.selectedTab) {
-          HudTab.HUD -> HudScreen(state, actions, inner)
-          HudTab.FINANCE -> FinanceScreen(state, actions, inner)
-          HudTab.INTEL -> IntelScreen(state, actions, inner)
-          HudTab.ASK -> AskScreen(state, actions, inner)
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+          Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
+            when (state.selectedTab) {
+              HudTab.HUD -> HudScreen(state, actions, inner)
+              HudTab.FINANCE -> FinanceScreen(state, actions, inner)
+              HudTab.INTEL -> IntelScreen(state, actions, inner)
+              HudTab.ASK -> AskScreen(state, actions, inner)
+            }
+          }
         }
       }
     }
+  }
+}
+
+@Composable
+private fun MainNavRail(state: JarvisUiState, onSelect: (HudTab) -> Unit) {
+  NavigationRail(
+    containerColor = HudColors.Surface,
+    modifier = Modifier.fillMaxHeight(),
+  ) {
+    Spacer(Modifier.weight(1f))
+    HudTab.entries.forEach { tab ->
+      NavigationRailItem(
+        selected = tab == state.selectedTab,
+        onClick = { onSelect(tab) },
+        icon = { TabIcon(tab, state) },
+        label = { Text(tab.label) },
+        modifier = Modifier.testTag("tab-${tab.name}"),
+        colors = NavigationRailItemDefaults.colors(
+          selectedIconColor = HudColors.OnCyan,
+          selectedTextColor = HudColors.Text,
+          indicatorColor = HudColors.Cyan,
+          unselectedIconColor = HudColors.TextMuted,
+          unselectedTextColor = HudColors.TextMuted,
+        ),
+      )
+    }
+    Spacer(Modifier.weight(1f))
+  }
+}
+
+@Composable
+private fun TabIcon(tab: HudTab, state: JarvisUiState) {
+  val inboxCount = state.items.count { it.status == ItemStatus.ACTIVE }
+  if (tab == HudTab.INTEL && inboxCount > 0) {
+    BadgedBox(badge = { Badge(containerColor = HudColors.Cyan, contentColor = HudColors.OnCyan) { Text(if (inboxCount > 99) "99+" else "$inboxCount") } }) {
+      Icon(tab.icon(), contentDescription = tab.label)
+    }
+  } else {
+    Icon(tab.icon(), contentDescription = tab.label)
   }
 }
 
@@ -115,6 +190,11 @@ private fun MainTopBar(state: JarvisUiState, actions: JarvisActions) {
       }
     },
     actions = {
+      if (state.selectedTab == HudTab.ASK && state.chatMessages.isNotEmpty()) {
+        IconButton(onClick = actions::onClearChat) {
+          Icon(Icons.Outlined.DeleteSweep, "Clear chat")
+        }
+      }
       IconButton(onClick = actions::onScanAndOrganize, enabled = !state.isSyncing) {
         if (state.isSyncing) {
           CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = HudColors.Cyan)
@@ -122,7 +202,7 @@ private fun MainTopBar(state: JarvisUiState, actions: JarvisActions) {
           Icon(Icons.Outlined.Refresh, "Refresh")
         }
       }
-      IconButton(onClick = actions::onOpenSettings) {
+      IconButton(onClick = actions::onOpenSettings, modifier = Modifier.testTag("openSettings")) {
         Icon(Icons.Outlined.Settings, "Settings")
       }
     },
@@ -143,22 +223,14 @@ private fun HudTab.icon(): ImageVector = when (this) {
 
 @Composable
 private fun MainNavBar(state: JarvisUiState, onSelect: (HudTab) -> Unit) {
-  val inboxCount = state.items.count { it.status == ItemStatus.ACTIVE }
   NavigationBar(containerColor = HudColors.Surface, tonalElevation = 0.dp) {
     HudTab.entries.forEach { tab ->
       NavigationBarItem(
         selected = tab == state.selectedTab,
         onClick = { onSelect(tab) },
-        icon = {
-          if (tab == HudTab.INTEL && inboxCount > 0) {
-            BadgedBox(badge = { Badge(containerColor = HudColors.Cyan, contentColor = HudColors.OnCyan) { Text(if (inboxCount > 99) "99+" else "$inboxCount") } }) {
-              Icon(tab.icon(), contentDescription = tab.label)
-            }
-          } else {
-            Icon(tab.icon(), contentDescription = tab.label)
-          }
-        },
+        icon = { TabIcon(tab, state) },
         label = { Text(tab.label) },
+        modifier = Modifier.testTag("tab-${tab.name}"),
         colors = NavigationBarItemDefaults.colors(
           selectedIconColor = HudColors.OnCyan,
           selectedTextColor = HudColors.Text,
@@ -188,6 +260,10 @@ private fun PreviewInbox() = JarvisApp(PreviewFixtures.state(HudTab.INTEL), Prev
 @Preview(name = "Ask", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0A0F1A)
 @Composable
 private fun PreviewAsk() = JarvisApp(PreviewFixtures.state(HudTab.ASK).copy(isAskingAi = true), PreviewFixtures.noOpActions)
+
+@Preview(name = "Tablet", widthDp = 900, heightDp = 600, showBackground = true, backgroundColor = 0xFF0A0F1A)
+@Composable
+private fun PreviewTablet() = JarvisApp(PreviewFixtures.state(HudTab.HUD), PreviewFixtures.noOpActions)
 
 @Preview(name = "Settings", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0A0F1A)
 @Composable

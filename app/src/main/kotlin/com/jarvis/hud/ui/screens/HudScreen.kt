@@ -53,6 +53,8 @@ import com.jarvis.hud.ui.components.HudFormat
 import com.jarvis.hud.ui.components.ItemCard
 import com.jarvis.hud.ui.components.JCard
 import com.jarvis.hud.ui.components.ListRow
+import com.jarvis.hud.ui.components.Refreshable
+import androidx.compose.ui.platform.testTag
 import com.jarvis.hud.ui.components.Meter
 import com.jarvis.hud.ui.components.SectionHeader
 import com.jarvis.hud.ui.components.SetupCard
@@ -76,8 +78,9 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
   val billsDue = active.count { it.category == IntelCategory.BILL }
   val today = state.calendarEntries.filter { it.startTime < dayEnd && it.endTime >= dayStart }.sortedBy { it.startTime }
 
+  Refreshable(state.isSyncing, actions::onScanAndOrganize, Modifier.fillMaxSize()) {
   LazyColumn(
-    Modifier.fillMaxSize(),
+    Modifier.fillMaxSize().testTag("screen-home"),
     contentPadding = screenPadding(contentPadding),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
@@ -122,7 +125,7 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
         JCard { EmptyLine("Nothing urgent. You're all caught up.") }
       }
     } else {
-      items(urgent, key = { "u-" + it.id }) { ItemCard(it, actions::onMarkItemStatus) }
+      items(urgent, key = { "u-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, onClick = { actions.onOpenItem(it.id) }) }
     }
     item(key = "today") {
       SectionHeader("Today", trailing = if (today.isEmpty()) null else "${today.size} events")
@@ -191,6 +194,7 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
       }
     }
     item(key = "device") { DeviceCard(state) }
+  }
   }
 }
 

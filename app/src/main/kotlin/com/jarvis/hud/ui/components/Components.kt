@@ -211,7 +211,7 @@ fun ListRow(
     Column(Modifier.weight(1f)) {
       Text(title, style = MaterialTheme.typography.titleSmall, color = HudColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (subtitle != null) {
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim, maxLines = 3, overflow = TextOverflow.Ellipsis)
       }
     }
     if (trailing != null) {
@@ -237,3 +237,30 @@ fun jarvisTextFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
   focusedPlaceholderColor = HudColors.TextMuted,
   unfocusedPlaceholderColor = HudColors.TextMuted,
 )
+
+/** Pull-to-refresh container used by the list screens. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun Refreshable(
+  refreshing: Boolean,
+  onRefresh: () -> Unit,
+  modifier: Modifier = Modifier,
+  content: @Composable () -> Unit,
+) {
+  val pullState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+  androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+    isRefreshing = refreshing,
+    onRefresh = onRefresh,
+    state = pullState,
+    modifier = modifier,
+    indicator = {
+      androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+        state = pullState,
+        isRefreshing = refreshing,
+        modifier = Modifier.align(Alignment.TopCenter),
+        containerColor = HudColors.SurfaceHigh,
+        color = HudColors.Cyan,
+      )
+    },
+  ) { content() }
+}
