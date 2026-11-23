@@ -1,9 +1,9 @@
 # Changelog
 
 All notable changes to J.A.R.V.I.S. HUD, newest first. Versions match `versionName` in
-`app/build.gradle.kts`. Add each change under **Unreleased**; at release time rename that heading
-to the version and date, then push a `vX.Y.Z` tag. CI publishes the GitHub release with the APK
-and that section as the notes.
+`app/build.gradle.kts`. Add each change under **Unreleased**. To release, rename that heading to the
+version and date, bump `versionName` and `versionCode`, and push to `main`: CI publishes the GitHub
+release with the APK and that section as the notes.
 
 ## [Unreleased]
 
@@ -25,7 +25,7 @@ and that section as the notes.
 - Chart colours are checked for colour-blind separation and contrast; a category keeps its colour regardless of rank.
 
 ### Added
-- CI publishes a GitHub release (APK + these notes) when a `v*` tag is pushed.
+- CI publishes a GitHub release (APK + these notes) when a new version reaches `main`, or when a `v*` tag is pushed.
 
 ## [1.1.0] - 2026-11-23
 

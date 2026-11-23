@@ -66,13 +66,31 @@ jobs:
             app/build/screenshots/
             app/build/reports/tests/
 
-      # Pushing a tag like v1.2.0 publishes a GitHub release with the APK and the
-      # matching CHANGELOG section. Uses the signed release APK when signing secrets
-      # are set, otherwise the debug-signed one.
-      - name: Prepare release
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Releases. A push to main whose versionName (app/build.gradle.kts) has no
+      # release yet publishes one: bump the version, update CHANGELOG.md, merge to
+      # main. Pushing a vX.Y.Z tag still works too. The release gets the APK (signed
+      # when the signing secrets are set, otherwise debug-signed) and that version's
+      # CHANGELOG section. Tests and the build above must pass first.
+      - name: Decide release
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          VERSION=$(sed -n 's/^ *versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          TAG=""
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+          elif [ "$GITHUB_REF" = "refs/heads/main" ] && [ -n "$VERSION" ]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+              echo "v$VERSION is already released; nothing to publish."
+            else
+              TAG="v$VERSION"
+            fi
+          fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Release tag: ${TAG:-none}"
+
+      - name: Prepare release
+        if: env.RELEASE_TAG != ''
+        run: |
+          TAG="$RELEASE_TAG"
           VERSION="${TAG#v}"
           APK=app/build/outputs/apk/release/app-release.apk
           [ -f "$APK" ] || APK=app/build/outputs/apk/debug/app-debug.apk
@@ -96,10 +114,14 @@ jobs:
           } > release-notes.md
           cat release-notes.md
 
+      # Creates the tag at this commit when it doesn't exist yet. Tags made with the
+      # workflow's own token don't start another run, so a release is published once.
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
-          name: J.A.R.V.I.S. HUD ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: J.A.R.V.I.S. HUD ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
-          files: jarvis-${{ github.ref_name }}.apk
+          files: jarvis-${{ env.RELEASE_TAG }}.apk
