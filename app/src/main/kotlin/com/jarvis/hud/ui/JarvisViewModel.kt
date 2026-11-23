@@ -156,8 +156,11 @@ class JarvisViewModel(
       status(STATUS_ORGANIZING)
       val organized: List<OrganizedItem> =
         if (fresh.isEmpty()) emptyList() else c.organizer.organize(fresh, s)
+      val before = c.store.items.value.size
       if (organized.isNotEmpty()) c.store.upsert(organized)
       if (fresh.isNotEmpty()) c.store.markProcessed(fresh.map { it.contentHash })
+      // Duplicate channel reports of one payment merge in the store, so count what was actually added.
+      val added = (c.store.items.value.size - before).coerceIn(0, organized.size)
 
       status(STATUS_BRIEFING)
       val calendar: List<CalendarEntry> = if (!s.isEnabled(DataSource.CALENDAR)) emptyList() else {
@@ -178,7 +181,7 @@ class JarvisViewModel(
       c.store.saveBriefing(briefing)
 
       _uiState.update {
-        it.copy(briefing = briefing, syncStatusLine = syncedLine(organized.size))
+        it.copy(briefing = briefing, syncStatusLine = syncedLine(added))
       }
     } catch (e: CancellationException) {
       throw e

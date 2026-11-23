@@ -86,6 +86,12 @@ data class OrganizedItem(
   val status: ItemStatus = ItemStatus.ACTIVE,
   val timestamp: Long,
   val source: DataSource,
+  /** Who sent the underlying event (SMS address or app name); identifies the delivery channel. */
+  val sender: String? = null,
+  /** Last 4 digits of the bank account / card involved, when the message names one. */
+  val accountTail: String? = null,
+  /** UPI / bank transaction reference number, when the message carries one. */
+  val reference: String? = null,
 )
 
 /**
