@@ -161,4 +161,22 @@ class AiJsonAndOrganizerTest {
     assertFalse(OkHttpOpenRouterClient.isFreeModel("a/b", "0.000001", "0"))
     assertEquals(401, OkHttpOpenRouterClient.httpError(401, "{}", "m").httpCode)
   }
+
+  @Test fun aiItemsGetSenderAccountAndReferenceFromTheRawEvent() = runTest {
+    val raw = RawEvent(
+      "u1", DataSource.SMS, "VM-HDFCBK", "",
+      "Rs.2,450.00 debited from A/c XX4821 to VPA swiggy@icici (UPI Ref 432918765510)", now, "hu1",
+    )
+    val reply = """[{"rawEventId":"u1","category":"FINANCE","title":"₹2,450 debited · Swiggy","summary":"Food","amount":2450,"isCredit":false,"merchant":"Swiggy","priority":"NORMAL"}]"""
+    val client = object : OpenRouterClient {
+      override suspend fun chat(apiKey: String, modelId: String, systemPrompt: String, messages: List<Pair<String, String>>) = Result.success(reply)
+      override suspend fun listModels(apiKey: String) = Result.success(emptyList<OpenRouterModelInfo>())
+      override suspend fun testConnection(apiKey: String, modelId: String) = ConnectionTestResult(true, "ok")
+    }
+    val item = HybridIntelOrganizer(client).organize(listOf(raw), JarvisSettings(apiKey = "k")).single()
+    assertEquals("Swiggy", item.merchant)
+    assertEquals("VM-HDFCBK", item.sender)
+    assertEquals("4821", item.accountTail)
+    assertEquals("432918765510", item.reference)
+  }
 }

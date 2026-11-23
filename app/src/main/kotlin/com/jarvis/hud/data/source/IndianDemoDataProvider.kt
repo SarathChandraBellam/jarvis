@@ -67,7 +67,51 @@ class IndianDemoDataProvider : DemoDataProvider {
       "EMI of Rs.15,230.00 for Loan A/c XX0987 will be debited on 25-Nov-26. Please maintain sufficient balance. - HDFC Bank", 720),
     Seed(DataSource.NOTIFICATION, "Zomato", "Your refund has been processed",
       "₹249 has been refunded to your UPI account for order #6732190. It may take 3-5 working days.", 900),
-  )
+
+    // Same payments reported again by a second channel. The store must merge these with the bank
+    // SMS above instead of counting the money twice.
+    Seed(DataSource.NOTIFICATION, "HDFC Bank", "Money sent",
+      "₹2,450.00 paid to Swiggy from A/c XX4821.", 11),
+    Seed(DataSource.NOTIFICATION, "Paytm", "Payment successful",
+      "Paid ₹350 to Ramesh Kirana Store. UPI Ref: 432987651201", 275),
+  ) + history()
+
+  /** ~6 weeks of past spending so month-to-date, patterns and recurring payments have data. */
+  private fun history(): List<Seed> {
+    fun upi(amount: String, vpa: String, ref: Long, daysAgo: Int, atMinute: Int) = Seed(
+      DataSource.SMS, "VM-HDFCBK", "VM-HDFCBK",
+      "Rs.$amount debited from A/c XX4821 to VPA $vpa (UPI Ref $ref). Not you? Call 18002586161 - HDFC Bank",
+      daysAgo * DAY_MIN + atMinute,
+    )
+    fun card(amount: String, merchant: String, daysAgo: Int, atMinute: Int) = Seed(
+      DataSource.SMS, "JM-ICICIB", "JM-ICICIB",
+      "Your ICICI Bank Credit Card XX5544 has been used for INR $amount at $merchant. Avl Lmt: INR 98,000.00",
+      daysAgo * DAY_MIN + atMinute,
+    )
+    return listOf(
+      upi("486.00", "zomato@hdfcbank", 432811000101, 1, 140),
+      card("1,240.00", "BIGBASKET", 1, 610),
+      upi("212.00", "uber@axisbank", 432811000102, 2, 30),
+      card("649.00", "NETFLIX", 3, 300),
+      upi("2,000.00", "hpcl.fuel@icici", 432811000103, 4, 520),
+      upi("389.00", "swiggy@icici", 432811000104, 5, 75),
+      card("3,499.00", "AMAZON", 6, 200),
+      upi("1,850.00", "bescom@okaxis", 432811000105, 8, 660),
+      upi("540.00", "dmart@ybl", 432811000106, 9, 400),
+      upi("5,000.00", "ankit.sharma@okhdfcbank", 432811000107, 10, 90),
+      card("899.00", "BOOKMYSHOW", 12, 45),
+      upi("312.00", "rapido@ybl", 432811000108, 13, 800),
+      card("1,120.00", "APOLLO PHARMACY", 16, 380),
+      upi("725.00", "zomato@hdfcbank", 432811000109, 19, 20),
+      upi("2,300.00", "hpcl.fuel@icici", 432811000110, 24, 500),
+      card("649.00", "NETFLIX", 33, 300),
+      upi("999.00", "jiofiber@sbi", 432811000111, 34, 600),
+      card("2,799.00", "MYNTRA", 36, 150),
+      upi("1,460.00", "swiggy@icici", 432811000112, 38, 60),
+      upi("999.00", "jiofiber@sbi", 432811000113, 64, 600),
+      card("649.00", "NETFLIX", 63, 300),
+    )
+  }
 
   override fun rawEvents(nowMillis: Long): List<RawEvent> = seeds.mapIndexed { i, s ->
     val ts = nowMillis - s.minutesAgo * MINUTE
@@ -150,6 +194,7 @@ class IndianDemoDataProvider : DemoDataProvider {
     const val MINUTE = 60_000L
     const val HOUR = 60 * MINUTE
     const val DAY = 24 * HOUR
+    const val DAY_MIN = 24 * 60L
 
     fun startOfDay(millis: Long): Long = Calendar.getInstance().apply {
       timeInMillis = millis

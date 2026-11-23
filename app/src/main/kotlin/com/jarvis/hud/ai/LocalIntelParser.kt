@@ -39,6 +39,7 @@ class LocalIntelParser(
       summary = IntelFormatting.truncate(event.body.ifBlank { event.title }, 180),
       timestamp = event.timestamp,
       source = event.source,
+      sender = event.sender.ifBlank { null },
     )
 
     // 1. OTP / verification codes
@@ -132,6 +133,8 @@ class LocalIntelParser(
         isCredit = isCredit,
         merchant = merchant,
         priority = if (!isCredit && amount.value >= LARGE_DEBIT) Priority.HIGH else Priority.NORMAL,
+        accountTail = extractAccountTail(text),
+        reference = extractReference(text),
       )
     }
 
@@ -165,6 +168,17 @@ class LocalIntelParser(
     val value = nonBalance.groupValues[1].replace(",", "").toDoubleOrNull() ?: return null
     return Amount(value, "₹")
   }
+
+  /**
+   * Last 4 digits of the account or card a transaction names ("A/c XX1234", "Card ending 1234",
+   * "a/c **5678"). Null when the message does not name one.
+   */
+  fun extractAccountTail(text: String): String? =
+    ACCOUNT_TAIL.find(text)?.groupValues?.get(1)?.filter(Char::isDigit)?.takeLast(4)?.takeIf { it.length == 4 }
+
+  /** UPI / IMPS / NEFT reference number ("UPI Ref No 412345678901", "Ref: 1234567890"). */
+  fun extractReference(text: String): String? =
+    REFERENCE.find(text)?.groupValues?.get(1)?.takeIf { ref -> ref.count(Char::isDigit) >= 6 }?.uppercase()
 
   internal enum class Direction { DEBIT, CREDIT }
 
@@ -300,7 +314,13 @@ class LocalIntelParser(
     private val AMOUNT = Regex("""(?i)(?:₹|\bRs\.?|\bINR)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
     private val BALANCE_HINT = Regex("""(bal|balance|limit|avl|available)[^0-9]*$""")
     private val CREDIT_WORDS = Regex("""\b(credited|received|refund(?:ed)?|deposited|cashback|reversed)\b""")
-    private val DEBIT_WORDS = Regex("""\b(debited|spent|paid|sent|withdrawn|withdrawal|purchase|deducted|charged|txn of|transaction of)\b""")
+    private val DEBIT_WORDS = Regex("""\b(debited|spent|paid|sent|withdrawn|withdrawal|purchase|deducted|charged|txn of|transaction of|used for|used at)\b""")
+    private val ACCOUNT_TAIL = Regex(
+      """(?i)\b(?:a/c|ac|acct|account|card|credit card|debit card)(?:\s*(?:no\.?|number))?(?:\s+(?:ending|ending with|ending in|end(?:s|ing)? with))?\s*[:.\-]?\s*(?:no\.?\s*)?([Xx*.\d]*\d{4})(?!\d)""",
+    )
+    private val REFERENCE = Regex(
+      """(?i)\b(?:upi\s*ref(?:erence)?|ref(?:erence)?|rrn|utr|txn\s*id|transaction\s*id|imps\s*ref)\b(?:\s*(?:no\.?|number|id))?\s*[:.#\-]?\s*([A-Z0-9]{6,22})\b""",
+    )
     private val VPA = Regex("""(?i)\bVPA\s*[:\-]?\s*([A-Za-z0-9.\-_]+@[A-Za-z0-9]+)""")
     private val AT_OR_TO = Regex("""(?i)\b(?:at|to)\b""")
     private val MERCHANT_STOP = Regex(
@@ -316,7 +336,7 @@ class LocalIntelParser(
     private val LEADING_FILLER = Regex("""^(?:(?:is|on|of|date|the)\s*:?\s+)+""", RegexOption.IGNORE_CASE)
 
     private val BILL_KEYWORDS = Regex(
-      """\b(bill|due on|due by|due date|payment due|amount due|amt due|min(?:imum)? (?:amount|amt) due|total due|statement|overdue|is due|pay by)\b""",
+      """\b(bill|due on|due by|due date|payment due|amount due|amt due|min(?:imum)? (?:amount|amt) due|total due|statement|overdue|is due|pay by|emi|will be (?:auto[\s\-]?)?debited|scheduled (?:for )?debit|autopay (?:due|scheduled))\b""",
     )
     private val BILL_PAID = Regex("""(payment (?:of .{0,30})?(?:received|successful)|thank you for (?:the |your )?payment|bill paid|has been paid|successfully paid)""")
     private val DUE_ANCHOR = Regex("""(?i)\b(?:due\s+(?:on|by|date)|due|pay\s+by|before|by|on)\b\s*:?""")

@@ -44,7 +44,9 @@ class HybridIntelOrganizer(
     return try {
       val payload = buildUserPayload(chunk, settings.redactSensitiveData)
       val result = client.chat(settings.apiKey, settings.modelId, SYSTEM_PROMPT, listOf("user" to payload))
-      result.getOrNull()?.let { AiJson.parseOrganizedItems(it, chunk) } ?: emptyMap()
+      val parsed = result.getOrNull()?.let { AiJson.parseOrganizedItems(it, chunk) } ?: emptyMap()
+      val byId = chunk.associateBy { it.id }
+      parsed.mapValues { (id, item) -> byId[id]?.let { withChannelDetails(item, it) } ?: item }
     } catch (e: CancellationException) {
       throw e
     } catch (_: Exception) {
@@ -67,6 +69,19 @@ class HybridIntelOrganizer(
       },
     )
     return "Today is ${Instant.now()}. Organize these ${chunk.size} events:\n$arr"
+  }
+
+  /**
+   * AI output does not carry the sender, account tail or transaction reference; fill them from the
+   * raw (unredacted) event so cross-channel duplicate detection works the same for AI and local items.
+   */
+  private fun withChannelDetails(item: OrganizedItem, event: RawEvent): OrganizedItem {
+    val text = "${event.title} ${event.body}"
+    return item.copy(
+      sender = item.sender ?: event.sender.ifBlank { null },
+      accountTail = item.accountTail ?: localParser.extractAccountTail(text),
+      reference = item.reference ?: localParser.extractReference(text),
+    )
   }
 
   private fun safeLocal(event: RawEvent): OrganizedItem = localParser.parse(event)

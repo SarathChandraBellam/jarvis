@@ -1,6 +1,7 @@
 package com.jarvis.hud.data.store
 
 import android.content.Context
+import com.jarvis.hud.ai.TransactionDeduper
 import com.jarvis.hud.contracts.IntelStore
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
@@ -31,23 +32,25 @@ class FileIntelStore(private val file: File) : IntelStore {
   private val mutex = Mutex()
   private var data: StoreFileDto = readFile()
   private val processed = LinkedHashSet(data.processedHashes)
-  private val itemsFlow = MutableStateFlow(data.items.mapNotNull { it.toModel() })
+  // Collapse duplicates persisted by earlier versions, which counted each channel separately.
+  private val itemsFlow = MutableStateFlow(
+    TransactionDeduper.collapse(data.items.mapNotNull { it.toModel() }).items.sortedByDescending { it.timestamp },
+  )
   override val items: StateFlow<List<OrganizedItem>> = itemsFlow.asStateFlow()
 
   override suspend fun upsert(items: List<OrganizedItem>) {
     if (items.isEmpty()) return
     mutate {
-      val merged = LinkedHashMap<String, OrganizedItem>()
-      itemsFlow.value.forEach { merged[it.id] = it }
-      items.forEach { incoming ->
-        val existing = merged[incoming.id]
-        merged[incoming.id] = if (existing != null && existing.status != ItemStatus.ACTIVE) {
-          incoming.copy(status = existing.status)
-        } else {
-          incoming
-        }
+      val current = itemsFlow.value
+      val statusById = current.associate { it.id to it.status }
+      // Re-organizing an item must not resurrect one the user already marked done / dismissed.
+      val incoming = items.map { item ->
+        val prior = statusById[item.id]
+        if (prior != null && prior != ItemStatus.ACTIVE) item.copy(status = prior) else item
       }
-      itemsFlow.value = merged.values.sortedByDescending { it.timestamp }.take(MAX_ITEMS)
+      // The same payment reported by SMS + bank app + UPI app collapses into one item.
+      val merged = TransactionDeduper.merge(current, incoming).items
+      itemsFlow.value = merged.sortedByDescending { it.timestamp }.take(MAX_ITEMS)
     }
   }
 
@@ -158,6 +161,9 @@ internal data class ItemStoreDto(
   val status: String = ItemStatus.ACTIVE.name,
   val timestamp: Long,
   val source: String,
+  val sender: String? = null,
+  val accountTail: String? = null,
+  val reference: String? = null,
 ) {
   fun toModel(): OrganizedItem? {
     val cat = IntelCategory.entries.firstOrNull { it.name == category } ?: return null
@@ -177,6 +183,9 @@ internal data class ItemStoreDto(
       status = ItemStatus.entries.firstOrNull { it.name == status } ?: ItemStatus.ACTIVE,
       timestamp = timestamp,
       source = src,
+      sender = sender,
+      accountTail = accountTail,
+      reference = reference,
     )
   }
 
@@ -196,6 +205,9 @@ internal data class ItemStoreDto(
       status = i.status.name,
       timestamp = i.timestamp,
       source = i.source.name,
+      sender = i.sender,
+      accountTail = i.accountTail,
+      reference = i.reference,
     )
   }
 }
