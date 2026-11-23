@@ -214,4 +214,29 @@ class SpendInsightsTest {
     assertTrue("income ${s.income}", s.income.any { it.key == IncomeKind.SALARY })
     assertEquals(7_099.0, s.todaySpent, 0.001)
   }
+
+  @Test fun dailySeries_forThisAndLastMonth() {
+    val s = SpendInsights.from(
+      listOf(debit(100.0, at(2026, 11, 1)), debit(50.0, at(2026, 11, 23, 9)), debit(70.0, at(2026, 10, 31))),
+      now, zone,
+    )
+    assertEquals(23, s.monthDays.size)
+    assertEquals(100.0, s.monthDays.first(), 0.0)
+    assertEquals(50.0, s.monthDays.last(), 0.0)
+    assertEquals(31, s.lastMonthDays.size)
+    assertEquals(70.0, s.lastMonthDays.last(), 0.0)
+    assertEquals(java.time.YearMonth.of(2026, 11), s.month)
+    assertEquals(LocalDate.of(2026, 11, 23), s.today)
+  }
+
+  @Test fun billerName_fromMessageOrSender() {
+    fun bill(title: String, summary: String, merchant: String? = null, sender: String? = null) =
+      debit(1.0, now, merchant, summary).copy(category = IntelCategory.BILL, title = title, sender = sender)
+    assertEquals("SBI Card", SpendInsights.billerName(bill("Credit card bill", "SBI Card ending 9012: Total Amt Due Rs.18,742", "SBICRD", "AX-SBICRD")))
+    assertEquals("Airtel", SpendInsights.billerName(bill("Mobile bill", "Your Airtel Postpaid bill of 799", "GMAIL", "Gmail")))
+    assertEquals("BESCOM", SpendInsights.billerName(bill("Electricity bill", "electricity bill", "BESCOM")))
+    assertEquals("Loan EMI", SpendInsights.billerName(bill("EMI due", "EMI of Rs.15,230.00 for Loan A/c XX0987")))
+    assertEquals("Acme", SpendInsights.billerName(bill("Bill due", "pay soon", "ACME")))
+    assertEquals("Bill", SpendInsights.billerName(bill("Bill due", "pay soon")))
+  }
 }

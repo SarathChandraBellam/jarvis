@@ -286,7 +286,8 @@ class LocalIntelParser(
   }
 
   private fun billKind(lower: String): String = when {
-    lower.contains("credit card") || Regex("\\bcard\\b").containsMatchIn(lower) && lower.contains("statement") -> "Credit card bill"
+    lower.contains("credit card") ||
+      Regex("\\bcard\\b").containsMatchIn(lower) && Regex("statement|amt due|amount due|total due|min(?:imum)? due").containsMatchIn(lower) -> "Credit card bill"
     lower.contains("electricity") || Regex("\\b(bescom|tneb|msedcl|tata power|adani electricity|bses|kseb)\\b").containsMatchIn(lower) -> "Electricity bill"
     lower.contains("broadband") || lower.contains("fiber") || lower.contains("fibre") -> "Broadband bill"
     lower.contains("postpaid") || lower.contains("mobile bill") -> "Mobile bill"

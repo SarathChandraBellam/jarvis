@@ -62,6 +62,8 @@ data class Recurring(val name: String, val amount: Double, val months: Int, val 
 
 /** Everything the Finance tab shows, computed once from organized items. */
 data class SpendInsights(
+  val month: YearMonth,
+  val today: LocalDate,
   val monthLabel: String,
   val monthSpent: Double,
   /** Spend over the same days of last month (1st … today's day-of-month). */
@@ -83,6 +85,10 @@ data class SpendInsights(
   val weekendAverage: Double,
   val income: List<Share<IncomeKind>>,
   val recurring: List<Recurring>,
+  /** Spend per day of this month, index 0 = the 1st, through today. */
+  val monthDays: List<Double>,
+  /** Spend per day of last month, every day of that month. */
+  val lastMonthDays: List<Double>,
 ) {
   val hasData: Boolean get() = monthSpent > 0 || monthReceived > 0 || last7Days.any { it.amount > 0 }
 
@@ -145,7 +151,10 @@ data class SpendInsights(
         order = IncomeKind.entries,
       )
 
+      val byDate = debits.groupBy { dateOf(it) }.mapValues { (_, v) -> v.sumOf { it.amount!! } }
       return SpendInsights(
+        month = thisMonth,
+        today = today,
         monthLabel = thisMonth.month.getDisplayName(java.time.format.TextStyle.FULL, Locale.ENGLISH),
         monthSpent = monthSpent,
         lastMonthSameSpan = lastSpan,
@@ -164,6 +173,8 @@ data class SpendInsights(
         weekendAverage = weekendSpend / weekendDays,
         income = income,
         recurring = recurring(debits.filter { !dateOf(it).isBefore(today.minusDays(RECURRING_LOOKBACK_DAYS)) }, ::dateOf),
+        monthDays = (1..today.dayOfMonth).map { byDate[thisMonth.atDay(it)] ?: 0.0 },
+        lastMonthDays = (1..lastMonth.lengthOfMonth()).map { byDate[lastMonth.atDay(it)] ?: 0.0 },
       )
     }
 
@@ -222,6 +233,24 @@ data class SpendInsights(
         else -> IncomeKind.OTHER
       }
     }
+
+    /** Who a bill is from: a known biller named in the message, else the tidied sender. */
+    fun billerName(item: OrganizedItem): String {
+      val text = listOfNotNull(item.title, item.summary, item.merchant, item.sender).joinToString(" ").lowercase()
+      BILLERS.entries.firstOrNull { (k, _) -> word(k).containsMatchIn(text) }?.let { return it.value }
+      return item.merchant?.takeIf { it.isNotBlank() }?.let { m ->
+        m.lowercase().replaceFirstChar { it.titlecase(Locale.ENGLISH) }
+      } ?: "Bill"
+    }
+
+    private val BILLERS = linkedMapOf(
+      "sbi card" to "SBI Card", "sbicrd" to "SBI Card", "hdfc bank credit card" to "HDFC Credit Card",
+      "icici bank credit card" to "ICICI Credit Card", "axis bank credit card" to "Axis Credit Card",
+      "airtel" to "Airtel", "jio" to "Jio", "vodafone" to "Vi", "bescom" to "BESCOM", "tneb" to "TNEB",
+      "msedcl" to "MSEDCL", "tata power" to "Tata Power", "adani electricity" to "Adani Electricity",
+      "act fibernet" to "ACT Fibernet", "lic" to "LIC", "loan a/c" to "Loan EMI", "emi" to "Loan EMI",
+      "hdfcbk" to "HDFC Bank", "icicib" to "ICICI Bank",
+    )
 
     /** Human merchant name: known brand, else a tidied UPI handle or title-cased name. */
     fun displayMerchant(item: OrganizedItem): String {
