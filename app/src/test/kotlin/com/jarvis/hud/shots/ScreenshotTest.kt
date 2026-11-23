@@ -5,6 +5,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.PermissionStatus
 import com.jarvis.hud.ui.JarvisApp
@@ -23,8 +25,10 @@ import org.robolectric.annotation.GraphicsMode
 class ScreenshotTest {
   @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
-  private fun shot(name: String, state: com.jarvis.hud.model.JarvisUiState) {
+  private fun shot(name: String, state: com.jarvis.hud.model.JarvisUiState, before: () -> Unit = {}) {
     rule.setContent { JarvisApp(state, PreviewFixtures.noOpActions) }
+    rule.waitForIdle()
+    before()
     rule.waitForIdle()
     val view = rule.activity.window.decorView
     val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
@@ -36,6 +40,19 @@ class ScreenshotTest {
 
   @Test fun home() = shot("home", PreviewFixtures.state(HudTab.HUD))
   @Test fun money() = shot("money", PreviewFixtures.state(HudTab.FINANCE))
+  @Test fun moneySpending() = shot("money-spending", sampleMoney()) { rule.onNodeWithText("Spending").performClick() }
+  @Test fun moneyBills() = shot("money-bills", sampleMoney()) { rule.onNodeWithText("Bills").performClick() }
+
+  /** Money tab fed by a realistic inbox run through the real parser and duplicate merging. */
+  private fun sampleMoney(): com.jarvis.hud.model.JarvisUiState {
+    val now = System.currentTimeMillis()
+    val parser = com.jarvis.hud.ai.LocalIntelParser()
+    val items = com.jarvis.hud.ai.TransactionDeduper.collapse(
+      com.jarvis.hud.testdata.SampleInbox().rawEvents(now).map(parser::parse),
+    ).items.sortedByDescending { it.timestamp }
+    return PreviewFixtures.state(HudTab.FINANCE).copy(items = items)
+  }
+
   @Test fun inbox() = shot("inbox", PreviewFixtures.state(HudTab.INTEL))
   @Test fun ask() = shot("ask", PreviewFixtures.state(HudTab.ASK).copy(isAskingAi = true))
   @Test fun settings() = shot("settings", PreviewFixtures.state().copy(showSettings = true))

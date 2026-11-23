@@ -109,7 +109,7 @@ class AppFlowTest {
     launch(containerWith(item("b1", "Electricity bill")))
     rule.onNodeWithTag("screen-home").assertIsDisplayed()
     rule.onNodeWithTag("tab-FINANCE").performClick()
-    rule.onNodeWithText("Spent in the last 7 days").assertIsDisplayed()
+    rule.onNodeWithTag("screen-money").assertIsDisplayed()
     rule.onNodeWithTag("tab-INTEL").performClick()
     rule.onNodeWithTag("inboxSearch").assertIsDisplayed()
     rule.onNodeWithTag("tab-ASK").performClick()
@@ -239,9 +239,23 @@ class AppFlowTest {
     val spend = item("f1", "Swiggy order", IntelCategory.FINANCE, Priority.NORMAL).copy(merchant = "Swiggy", dueDate = null)
     launch(containerWith(item("b1", "Electricity bill"), spend))
     rule.onNodeWithTag("tab-FINANCE").performClick()
-    rule.onNodeWithText("Upcoming bills").assertIsDisplayed()
-    rule.onNodeWithTag("screen-money").performScrollToNode(hasText("Swiggy order"))
+    // Overview: bill due soon and the payment in Recent.
+    rule.onNodeWithText("Due this week").assertIsDisplayed()
+    rule.onNodeWithTag("screen-money").performScrollToNode(hasText("Swiggy"))
+    rule.onNodeWithText("Swiggy").assertIsDisplayed()
+    // Tapping the payment opens the shared details sheet.
+    rule.onNodeWithText("Swiggy").performClick()
     rule.onNodeWithText("Swiggy order").assertIsDisplayed()
+  }
+
+  @Test fun moneyViewsSwitch() {
+    val spend = item("f1", "Swiggy order", IntelCategory.FINANCE, Priority.NORMAL).copy(merchant = "Swiggy", dueDate = null)
+    launch(containerWith(item("b1", "Electricity bill"), spend))
+    rule.onNodeWithTag("tab-FINANCE").performClick()
+    rule.onNodeWithText("Spending").performClick()
+    rule.onNodeWithText("Food & dining").assertIsDisplayed()
+    rule.onNodeWithText("Bills").performClick()
+    rule.onNodeWithText("1 bill open").assertIsDisplayed()
   }
 
   // ------------------------------------------------------------------ ask

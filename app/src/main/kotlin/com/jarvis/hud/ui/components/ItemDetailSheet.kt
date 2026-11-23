@@ -91,6 +91,10 @@ fun ItemDetailSheet(
       item.dueDate?.let { DetailRow("Due", it, HudColors.Amber) }
       DetailRow("Priority", item.priority.displayLabel(), item.priority.color())
       DetailRow("Source", item.source.label)
+      // What identifies a payment: shown so you can see how it was read and why two alerts were merged.
+      item.sender?.let { DetailRow("From", it) }
+      item.accountTail?.let { DetailRow("Account", "··$it") }
+      item.reference?.let { DetailRow("Reference", it) }
       DetailRow(
         "Status",
         when (item.status) {

@@ -1,6 +1,5 @@
 package com.jarvis.hud.ui.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,260 +9,278 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material.icons.outlined.SouthWest
-import androidx.compose.material.icons.outlined.NorthEast
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.jarvis.hud.insights.SpendCategory
+import com.jarvis.hud.insights.SpendInsights
 import com.jarvis.hud.model.IntelCategory
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.model.OrganizedItem
-import com.jarvis.hud.ui.components.EmptyLine
 import com.jarvis.hud.ui.components.EmptyState
-import com.jarvis.hud.ui.components.HudFormat
-import com.jarvis.hud.ui.components.startOfMonth
-import com.jarvis.hud.ui.components.ItemCard
-import com.jarvis.hud.ui.components.JCard
 import com.jarvis.hud.ui.components.Meter
 import com.jarvis.hud.ui.components.Refreshable
-import androidx.compose.ui.platform.testTag
-import com.jarvis.hud.ui.components.SectionHeader
-import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.finance.BillRow
+import com.jarvis.hud.ui.finance.CategoryBreakdown
+import com.jarvis.hud.ui.finance.DayHeader
+import com.jarvis.hud.ui.finance.Divider
+import com.jarvis.hud.ui.finance.Fin
+import com.jarvis.hud.ui.finance.PaceChart
+import com.jarvis.hud.ui.finance.SectionHeader
+import com.jarvis.hud.ui.finance.SegmentedTabs
+import com.jarvis.hud.ui.finance.SpendCalendar
+import com.jarvis.hud.ui.finance.TransactionRow
+import com.jarvis.hud.ui.finance.dayLabel
+import com.jarvis.hud.ui.finance.rupees
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
-private data class FinanceSummary(
-  val todayDebit: Double,
-  val monthDebit: Double,
-  val weekDebit: Double,
-  val weekCredit: Double,
-  /** Oldest → today, 7 entries: (day start millis, debit total). */
-  val perDay: List<Pair<Long, Double>>,
-  val merchants: List<Pair<String, Double>>,
-  val bills: List<OrganizedItem>,
-  val transactions: List<OrganizedItem>,
-)
-
-private fun summarize(items: List<OrganizedItem>, now: Long): FinanceSummary {
-  val tx = items.filter { it.category == IntelCategory.FINANCE && it.status != ItemStatus.DISMISSED }
-  val money = tx.filter { it.amount != null }
-  val today = HudFormat.startOfDay(now)
-  val weekStart = HudFormat.startOfDay(now, 6)
-  fun sum(from: Long, credit: Boolean) =
-    money.filter { it.timestamp >= from && it.isCredit == credit }.sumOf { it.amount ?: 0.0 }
-  val perDay = (6 downTo 0).map { ago ->
-    val start = HudFormat.startOfDay(now, ago)
-    val end = start + 24 * 3_600_000L
-    start to money.filter { !it.isCredit && it.timestamp in start until end }.sumOf { it.amount ?: 0.0 }
-  }
-  val merchants = money
-    .filter { !it.isCredit && it.timestamp >= weekStart }
-    .groupBy { (it.merchant ?: it.title).trim() }
-    .mapValues { (_, v) -> v.sumOf { it.amount ?: 0.0 } }
-    .entries.sortedByDescending { it.value }
-    .take(5)
-    .map { it.key to it.value }
-  val bills = items
-    .filter { it.category == IntelCategory.BILL && it.status == ItemStatus.ACTIVE }
-    .sortedWith(compareBy(nullsLast()) { it.dueDate })
-  return FinanceSummary(
-    todayDebit = sum(today, false),
-    monthDebit = sum(HudFormat.startOfMonth(now), false),
-    weekDebit = sum(weekStart, false),
-    weekCredit = sum(weekStart, true),
-    perDay = perDay,
-    merchants = merchants,
-    bills = bills,
-    transactions = tx.sortedByDescending { it.timestamp },
-  )
-}
-
-/** Money tab: weekly overview, spend chart, bills, merchants, transactions. */
+/**
+ * Money tab, organised as three questions:
+ *  - Overview: how much have I spent, is that more than usual, am I within budget? What's due,
+ *    what just happened?
+ *  - Spending: where did it go and when? (tap a category or a day to filter the payments)
+ *  - Bills: what do I owe, by when, and what repeats every month?
+ * Tapping a payment or bill opens the shared details sheet.
+ */
 @Composable
 fun FinanceScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
-  val s = remember(state.items) { summarize(state.items, System.currentTimeMillis()) }
+  val zone = remember { ZoneId.systemDefault() }
+  val s = remember(state.items) { SpendInsights.from(state.items, System.currentTimeMillis(), zone) }
+  val payments = remember(state.items) {
+    state.items.filter { it.category == IntelCategory.FINANCE && it.status != ItemStatus.DISMISSED && it.amount != null }
+      .sortedByDescending { it.timestamp }
+  }
+  val bills = remember(state.items) {
+    state.items.filter { it.category == IntelCategory.BILL && it.status == ItemStatus.ACTIVE }
+      .sortedWith(compareBy(nullsLast()) { it.dueDate })
+  }
+
+  var view by rememberSaveable { mutableStateOf(0) }
+  var category by remember { mutableStateOf<SpendCategory?>(null) }
+  var day by remember { mutableStateOf<LocalDate?>(null) }
+  val dateOf: (OrganizedItem) -> LocalDate = { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
+  val open: (OrganizedItem) -> Unit = { actions.onOpenItem(it.id) }
+  val paid: (OrganizedItem) -> Unit = { actions.onMarkItemStatus(it.id, ItemStatus.DONE) }
+
+  val inset = screenPadding(contentPadding)
   Refreshable(state.isSyncing, actions::onScanAndOrganize, Modifier.fillMaxSize()) {
-  LazyColumn(
-    Modifier.fillMaxSize().testTag("screen-money"),
-    contentPadding = screenPadding(contentPadding),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    item(key = "overview") {
-      JCard(padding = 18.dp) {
-        Text("Spent in the last 7 days", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
-        Spacer(Modifier.height(4.dp))
-        Text(HudFormat.money(s.weekDebit), style = MaterialTheme.typography.displaySmall, color = HudColors.Text)
-        Spacer(Modifier.height(2.dp))
-        Text("${HudFormat.money(s.todayDebit)} today", style = MaterialTheme.typography.bodyMedium, color = HudColors.TextDim)
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          FlowTile("Money in", s.weekCredit, Icons.Outlined.SouthWest, HudColors.Green, Modifier.weight(1f))
-          FlowTile("Money out", s.weekDebit, Icons.Outlined.NorthEast, HudColors.Red, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(12.dp))
-        val net = s.weekCredit - s.weekDebit
-        Text(
-          "Net this week: ${if (net >= 0) "+" else "−"}${HudFormat.money(abs(net))}",
-          style = MaterialTheme.typography.labelLarge,
-          color = if (net >= 0) HudColors.Green else HudColors.Amber,
-        )
+    LazyColumn(
+      Modifier.fillMaxSize().testTag("screen-money"),
+      contentPadding = PaddingValues(
+        start = 20.dp,
+        end = 20.dp,
+        top = inset.calculateTopPadding() + 4.dp,
+        bottom = inset.calculateBottomPadding() + 8.dp,
+      ),
+    ) {
+      item(key = "tabs") {
+        SegmentedTabs(listOf("Overview", "Spending", "Bills"), view, { view = it })
+        Spacer(Modifier.height(24.dp))
       }
-    }
-    if (state.settings.monthlyBudget > 0) {
-      item(key = "budget") { BudgetCard(s.monthDebit, state.settings.monthlyBudget) }
-    }
-    item(key = "chart") {
-      SectionHeader("Daily spending")
-      Spacer(Modifier.height(8.dp))
-      JCard { SpendChart(s.perDay) }
-    }
-    item(key = "bills") {
-      SectionHeader("Upcoming bills", trailing = if (s.bills.isEmpty()) null else "${s.bills.size} due")
-    }
-    if (s.bills.isEmpty()) {
-      item(key = "billsEmpty") { JCard { EmptyLine("No bills pending.") } }
-    } else {
-      items(s.bills, key = { "bill-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, onClick = { actions.onOpenItem(it.id) }) }
-    }
-    item(key = "merchants") {
-      SectionHeader("Where it went")
-      Spacer(Modifier.height(8.dp))
-      JCard {
-        if (s.merchants.isEmpty()) EmptyLine("No spending this week.")
-        val max = s.merchants.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
-        s.merchants.forEachIndexed { i, (name, amt) ->
-          if (i > 0) Spacer(Modifier.height(12.dp))
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(name, style = MaterialTheme.typography.bodyMedium, color = HudColors.Text, maxLines = 1,
-              overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text(HudFormat.money(amt), style = MaterialTheme.typography.labelLarge, color = HudColors.Text)
-          }
-          Spacer(Modifier.height(6.dp))
-          Meter((amt / max).toFloat(), HudColors.Violet)
-        }
-      }
-    }
-    item(key = "txHeader") { SectionHeader("Transactions", trailing = "${s.transactions.size}") }
-    if (s.transactions.isEmpty()) {
-      item(key = "txEmpty") {
-        JCard {
+
+      if (payments.isEmpty() && bills.isEmpty()) {
+        item(key = "empty") {
+          if (state.settings.monthlyBudget > 0) Budget(s.monthSpent, state.settings.monthlyBudget)
           EmptyState(
             Icons.Outlined.AccountBalanceWallet,
             "No transactions yet",
             "Allow SMS access and refresh. Bank and UPI alerts will show up here.",
           )
         }
+        return@LazyColumn
       }
-    }
-    items(s.transactions, key = { "tx-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, compact = true, onClick = { actions.onOpenItem(it.id) }) }
-  }
-  }
-}
 
-@Composable
-private fun FlowTile(label: String, amount: Double, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, modifier: Modifier) {
-  JCard(modifier, color = HudColors.SurfaceHigh, borderColor = Color.Transparent, padding = 12.dp) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      Icon(icon, null, tint = tint, modifier = Modifier.padding(end = 6.dp))
-      Text(label, style = MaterialTheme.typography.labelMedium, color = HudColors.TextDim)
-    }
-    Spacer(Modifier.height(4.dp))
-    Text(HudFormat.money(amount), style = MaterialTheme.typography.titleMedium, color = HudColors.Text, maxLines = 1)
-  }
-}
-
-@Composable
-private fun SpendChart(perDay: List<Pair<Long, Double>>) {
-  val max = perDay.maxOfOrNull { it.second }?.takeIf { it > 0 } ?: 1.0
-  Column {
-    Row(Modifier.fillMaxWidth()) {
-      perDay.forEach { (_, v) ->
-        Text(
-          if (v > 0) HudFormat.moneyCompact(v) else "",
-          style = MaterialTheme.typography.labelSmall,
-          color = if (v == max && v > 0) HudColors.Amber else HudColors.TextMuted,
-          textAlign = TextAlign.Center,
-          maxLines = 1,
-          modifier = Modifier.weight(1f),
-        )
-      }
-    }
-    Spacer(Modifier.height(6.dp))
-    Canvas(Modifier.fillMaxWidth().height(120.dp)) {
-      val n = perDay.size.coerceAtLeast(1)
-      val slot = size.width / n
-      val barW = slot * 0.5f
-      val radius = CornerRadius(barW / 2, barW / 2)
-      perDay.forEachIndexed { i, (_, v) ->
-        val x = slot * i + (slot - barW) / 2
-        // Track.
-        drawRoundRect(HudColors.SurfaceHigh, Offset(x, 0f), Size(barW, size.height), radius)
-        val h = ((v / max).toFloat() * size.height).coerceAtLeast(if (v > 0) barW else 0f)
-        if (h > 0f) {
-          val color = when {
-            v == max -> HudColors.Amber
-            i == n - 1 -> HudColors.Cyan
-            else -> HudColors.Cyan.copy(alpha = 0.55f)
+      when (view) {
+        0 -> overview(s, payments, bills, state.settings.monthlyBudget, zone, open, paid) { view = it }
+        1 -> {
+          item(key = "where") {
+            SectionHeader("Where it went in ${s.monthLabel}")
+            if (s.categories.isEmpty()) Text("No spending yet this month.", style = Fin.Small)
+            CategoryBreakdown(s.categories, category) { category = it }
+            Spacer(Modifier.height(28.dp))
+            SectionHeader("When")
+            SpendCalendar(s, day) { day = it }
+            Spacer(Modifier.height(28.dp))
           }
-          drawRoundRect(color, Offset(x, size.height - h), Size(barW, h), radius)
+          val filtered = payments.filter { p ->
+            (category == null || (!p.isCredit && SpendInsights.categorize(p) == category)) &&
+              (day == null || dateOf(p) == day) &&
+              (day != null || !dateOf(p).isBefore(s.month.atDay(1)))
+          }
+          item(key = "ledgerHeader") {
+            val scope = listOfNotNull(category?.label, day?.let { dayLabel(it, s.today) }).joinToString(" · ")
+            SectionHeader(
+              if (scope.isEmpty()) "Payments this month" else scope,
+              action = if (scope.isEmpty()) null else "Clear",
+              onAction = { category = null; day = null },
+            )
+            if (filtered.isEmpty()) Text("Nothing here.", style = Fin.Small)
+          }
+          filtered.groupBy(dateOf).forEach { (date, dayItems) ->
+            item(key = "d-$date") { DayHeader(date, s.today, dayItems.filter { !it.isCredit }.sumOf { it.amount ?: 0.0 }) }
+            items(dayItems, key = { "t-" + it.id }) { p -> TransactionRow(p, zone, onClick = { open(p) }) }
+          }
+        }
+        else -> billsView(s, bills, open, paid)
+      }
+    }
+  }
+}
+
+private fun LazyListScope.overview(
+  s: SpendInsights,
+  payments: List<OrganizedItem>,
+  bills: List<OrganizedItem>,
+  budget: Double,
+  zone: ZoneId,
+  open: (OrganizedItem) -> Unit,
+  paid: (OrganizedItem) -> Unit,
+  goTo: (Int) -> Unit,
+) {
+  item(key = "hero") {
+    Text("Spent in ${s.monthLabel}", style = Fin.Small)
+    Text(rupees(s.monthSpent), style = Fin.Hero)
+    val d = s.monthDelta
+    val (line, tone) = when {
+      d == null -> "Nothing to compare with last month yet" to Fin.Ink2
+      abs(d) < 0.01 -> "About the same as this time last month" to Fin.Ink2
+      d > 0 -> "${rupees(s.monthSpent - s.lastMonthSameSpan)} more than this time last month (+${(d * 100).roundToLong()}%)" to Fin.Warning
+      else -> "${rupees(s.lastMonthSameSpan - s.monthSpent)} less than this time last month (${(d * 100).roundToLong()}%)" to Fin.Positive
+    }
+    Text(line, style = Fin.Small.copy(color = tone))
+    if (budget > 0) {
+      Spacer(Modifier.height(16.dp))
+      Budget(s.monthSpent, budget)
+    }
+    Spacer(Modifier.height(24.dp))
+    PaceChart(s)
+    Spacer(Modifier.height(24.dp))
+    Divider()
+    Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      Stat("Per day", rupees(s.dailyAverage), Modifier.weight(1f))
+      Stat("Month-end pace", rupees(s.projectedMonth), Modifier.weight(1f))
+      Stat("Came in", rupees(s.monthReceived), Modifier.weight(1f))
+    }
+    Divider()
+    Spacer(Modifier.height(20.dp))
+  }
+
+  val soon = bills.filter { b ->
+    val due = b.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    due == null || ChronoUnit.DAYS.between(s.today, due) <= 7
+  }.take(3)
+  if (soon.isNotEmpty()) {
+    item(key = "soon") {
+      SectionHeader("Due this week", action = "All bills", onAction = { goTo(2) })
+      soon.forEach { b -> BillRow(b, s.today, onPaid = { paid(b) }, onClick = { open(b) }) }
+      Spacer(Modifier.height(20.dp))
+    }
+  }
+
+  if (payments.isNotEmpty()) {
+    item(key = "recentHeader") { SectionHeader("Recent", action = "All payments", onAction = { goTo(1) }) }
+    items(payments.take(6), key = { "r-" + it.id }) { p -> TransactionRow(p, zone, onClick = { open(p) }, today = s.today) }
+  }
+}
+
+private fun LazyListScope.billsView(
+  s: SpendInsights,
+  bills: List<OrganizedItem>,
+  open: (OrganizedItem) -> Unit,
+  paid: (OrganizedItem) -> Unit,
+) {
+  item(key = "billsTop") {
+    Text("Due", style = Fin.Small)
+    Text(rupees(bills.sumOf { it.amount ?: 0.0 }), style = Fin.Hero)
+    Text(
+      if (bills.isEmpty()) "Nothing due" else "${bills.size} bill${if (bills.size == 1) "" else "s"} open",
+      style = Fin.Small,
+    )
+    Spacer(Modifier.height(20.dp))
+  }
+  val (soon, later) = bills.partition { b ->
+    val due = b.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    due != null && ChronoUnit.DAYS.between(s.today, due) <= 7
+  }
+  fun group(title: String, list: List<OrganizedItem>, key: String) {
+    if (list.isEmpty()) return
+    item(key = key) {
+      SectionHeader(title)
+      list.forEach { b -> BillRow(b, s.today, onPaid = { paid(b) }, onClick = { open(b) }) }
+      Spacer(Modifier.height(20.dp))
+    }
+  }
+  group("This week", soon, "b-soon")
+  group("Later", later, "b-later")
+
+  if (s.recurring.isNotEmpty()) {
+    item(key = "recurring") {
+      SectionHeader("Every month")
+      Text("Charged the same amount in more than one month: subscriptions, plans, rent.", style = Fin.Small)
+      Spacer(Modifier.height(8.dp))
+      s.recurring.forEach { r ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+          Column(Modifier.weight(1f)) {
+            Text(r.name, style = Fin.Body)
+            Text("Seen in ${r.months} months · last ${dayLabel(r.lastSeen, s.today)}", style = Fin.Small)
+          }
+          Text(rupees(r.amount), style = Fin.Body)
         }
       }
-    }
-    Spacer(Modifier.height(6.dp))
-    Row(Modifier.fillMaxWidth()) {
-      perDay.forEachIndexed { i, (day, _) ->
-        Text(
-          if (i == perDay.lastIndex) "Today" else HudFormat.dayShort(day),
-          style = MaterialTheme.typography.labelSmall,
-          color = if (i == perDay.lastIndex) HudColors.Cyan else HudColors.TextMuted,
-          textAlign = TextAlign.Center,
-          maxLines = 1,
-          modifier = Modifier.weight(1f),
-        )
+      Divider(Modifier.padding(top = 8.dp))
+      Row(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Text("Committed each month", style = Fin.Small, modifier = Modifier.weight(1f))
+        Text(rupees(s.recurring.sumOf { it.amount }), style = Fin.BodyStrong)
       }
     }
   }
 }
 
+/** Monthly budget (set in Settings → Money): how much is used and what's left. */
 @Composable
-private fun BudgetCard(spent: Double, budget: Double) {
+private fun Budget(spent: Double, budget: Double) {
   val frac = (spent / budget).toFloat()
   val color = when {
-    frac >= 1f -> HudColors.Red
-    frac >= 0.8f -> HudColors.Amber
-    else -> HudColors.Green
+    frac >= 1f -> Fin.Critical
+    frac >= 0.8f -> Fin.Warning
+    else -> Fin.Positive
   }
   val left = budget - spent
-  JCard(Modifier.testTag("budgetCard")) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      Text("Monthly budget", style = MaterialTheme.typography.titleSmall, color = HudColors.Text, modifier = Modifier.weight(1f))
-      Text("${(frac * 100).toInt().coerceAtMost(999)}%", style = MaterialTheme.typography.labelLarge, color = color)
-    }
-    Spacer(Modifier.height(10.dp))
-    Meter(frac, color, height = 10.dp)
-    Spacer(Modifier.height(8.dp))
+  Column(Modifier.fillMaxWidth().testTag("budgetCard")) {
+    Meter(frac, color, height = 8.dp)
+    Spacer(Modifier.height(6.dp))
     Text(
-      if (left >= 0) "${HudFormat.money(left)} left of ${HudFormat.money(budget)} this month"
-      else "${HudFormat.money(-left)} over your ${HudFormat.money(budget)} budget",
-      style = MaterialTheme.typography.bodySmall,
-      color = if (left >= 0) HudColors.TextDim else HudColors.Red,
+      if (left >= 0) "${rupees(left)} left of your ${rupees(budget)} budget (${(frac * 100).toInt()}% used)"
+      else "${rupees(-left)} over your ${rupees(budget)} budget",
+      style = Fin.Small.copy(color = if (left >= 0) Fin.Ink2 else Fin.Critical),
     )
+  }
+}
+
+@Composable
+private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
+  Column(modifier) {
+    Text(label, style = Fin.Small)
+    Spacer(Modifier.height(2.dp))
+    Text(value, style = Fin.Figure)
   }
 }

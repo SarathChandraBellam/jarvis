@@ -43,6 +43,9 @@ object PreviewFixtures {
   fun state(tab: HudTab = HudTab.HUD, now: Long = System.currentTimeMillis()): JarvisUiState {
     val h = 3_600_000L
     val d = 24 * h
+    // Due dates are ISO yyyy-MM-dd, as the parser and AI produce them.
+    fun dueIn(days: Long) = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
+      .toLocalDate().plusDays(days).toString()
     fun fin(id: String, title: String, amt: Double, merchant: String, ago: Long, credit: Boolean = false, p: Priority = Priority.NORMAL) =
       OrganizedItem(
         id = id, rawEventId = null, category = IntelCategory.FINANCE, title = title,
@@ -51,9 +54,9 @@ object PreviewFixtures {
       )
     val items = listOf(
       OrganizedItem("b1", null, IntelCategory.BILL, "HDFC credit card bill", "Total due ₹18,420 · min ₹920",
-        amount = 18420.0, dueDate = "25 Nov", priority = Priority.CRITICAL, timestamp = now - 2 * h, source = DataSource.SMS),
+        amount = 18420.0, dueDate = dueIn(2), priority = Priority.CRITICAL, timestamp = now - 2 * h, source = DataSource.SMS),
       OrganizedItem("b2", null, IntelCategory.BILL, "Airtel postpaid", "Bill generated for Nov",
-        amount = 799.0, dueDate = "28 Nov", priority = Priority.HIGH, timestamp = now - 20 * h, source = DataSource.SMS),
+        amount = 799.0, dueDate = dueIn(5), priority = Priority.HIGH, timestamp = now - 20 * h, source = DataSource.SMS),
       OrganizedItem("d1", null, IntelCategory.DELIVERY, "Amazon: out for delivery", "Boat Airdopes 141 arriving by 7 PM",
         priority = Priority.HIGH, timestamp = now - 1 * h, source = DataSource.NOTIFICATION),
       OrganizedItem("t1", null, IntelCategory.TRAVEL, "IndiGo 6E-2134 BLR → DEL", "Web check-in open · Seat 14C",
