@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publish the GitHub release when a v* tag is pushed
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -63,3 +65,41 @@ jobs:
           path: |
             app/build/screenshots/
             app/build/reports/tests/
+
+      # Pushing a tag like v1.2.0 publishes a GitHub release with the APK and the
+      # matching CHANGELOG section. Uses the signed release APK when signing secrets
+      # are set, otherwise the debug-signed one.
+      - name: Prepare release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          APK=app/build/outputs/apk/release/app-release.apk
+          [ -f "$APK" ] || APK=app/build/outputs/apk/debug/app-debug.apk
+          cp "$APK" "jarvis-${TAG}.apk"
+          CERT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "jarvis-${TAG}.apk" \
+            | sed -n 's/.*SHA-256 digest: //p' | head -1)
+          # v1.1.0's signing certificate: same key means the APK updates it in place.
+          PREVIOUS=e2c0c44f4f2fadde2ca930c5c6f634014ac2c75de2b45b80b55802364c90e501
+          {
+            echo "**Install:** download \`jarvis-${TAG}.apk\` below and open it on your Android phone (8.0+)."
+            echo
+            if [ "$CERT" = "$PREVIOUS" ]; then
+              echo "Updates v1.1.0 in place; your data is kept."
+            else
+              echo "**Signed with a different key from v1.1.0:** uninstall the existing app first, then install this APK. Uninstalling removes the app's local data."
+            fi
+            echo
+            awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md
+            echo
+            echo "Signing certificate SHA-256: \`${CERT}\`"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: J.A.R.V.I.S. HUD ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: jarvis-${{ github.ref_name }}.apk

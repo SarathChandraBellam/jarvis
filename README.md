@@ -8,6 +8,8 @@ An on-device personal assistant for Android (Kotlin + Jetpack Compose). It reads
 - **Settings save automatically** — there is no Save button
 - **Welcome screen** on first launch to set your name and grant access
 - **Inbox search**, pull-to-refresh, and a details sheet (tap any item: mark done, dismiss, share)
+- **Money tab** in three views: *Overview* (month vs last month, budget, pace chart, recent payments), *Spending* (by category and on a calendar, tap to filter) and *Bills* (due soon, later, and what repeats monthly)
+- **No double counting:** a payment reported by bank SMS, the bank app and a UPI app is merged into one (matched by UPI/bank reference, or same amount and account within 10 minutes from different channels)
 - **Monthly budget** tracking on the Money tab
 - **Tablet / landscape layout** with a side navigation rail
 
@@ -40,4 +42,4 @@ with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Without it, the re
 - **Settings persistence tests** that check every setting survives an app restart.
 - **Screenshot tests** that render each screen to `app/build/screenshots/`.
 
-GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. To sign release builds in CI, add the `JARVIS_KEYSTORE_B64`, `JARVIS_STORE_PASSWORD`, `JARVIS_KEY_ALIAS` and `JARVIS_KEY_PASSWORD` repository secrets.
+GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. Pushing a `vX.Y.Z` tag also publishes a GitHub release with the APK, using that version's section of [CHANGELOG.md](CHANGELOG.md) as the notes. To sign release builds in CI, add the `JARVIS_KEYSTORE_B64`, `JARVIS_STORE_PASSWORD`, `JARVIS_KEY_ALIAS` and `JARVIS_KEY_PASSWORD` repository secrets.
