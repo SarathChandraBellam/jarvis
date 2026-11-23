@@ -157,7 +157,16 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
             }
           }
         }
+        val totalMinutes = state.appUsageStats.sumOf { it.foregroundMinutes }
         HudPanel(Modifier.weight(1f), title = "Screen Time", accent = HudColors.Violet) {
+          if (totalMinutes > 0) {
+            Text(
+              "${HudFormat.minutes(totalMinutes)} today",
+              style = MaterialTheme.typography.titleSmall,
+              color = HudColors.Text,
+              modifier = Modifier.padding(bottom = 6.dp),
+            )
+          }
           val top = state.appUsageStats.sortedByDescending { it.foregroundMinutes }.take(5)
           val max = (top.maxOfOrNull { it.foregroundMinutes } ?: 1L).coerceAtLeast(1L)
           if (top.isEmpty()) HudEmptyLine("No usage data")
