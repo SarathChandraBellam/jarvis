@@ -7,6 +7,20 @@ release with the APK and that section as the notes.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-25
+
+### Added
+- **Warm calm personal wellness & subscriptions UI.** Redesigned across Today, Subs, Inbox, Ask, Onboarding, and Settings with paper-cream surfaces, pastel status accents, serif typography, and a floating pill navigation dock with detached Ask orb.
+- **Today multi-view hub (`Overview · Food · Cycle · Sleep · Plan`).**
+  - *Overview*: swipeable Daily Briefing with voice playback, Sleep / Movement / Renewals score rings, quick-log tiles, calorie & macro summary, and urgent items.
+  - *Food*: local-first Indian & everyday dish macro estimator (plus optional OpenRouter AI estimation), calorie ring, triple macro bars, and meal logging.
+  - *Cycle & period tracker*: 4-phase tracking (Menstrual, Follicular, Mid-cycle, Luteal), interactive monthly period calendar, predictions, phase guidance cards, proactive period nudges, and **Female / Male** profile toggle in Onboarding & Settings to show or hide cycle tracking.
+  - *Sleep, Steps & Focus*: 7-day mini sleep rings and stage breakdown, Fasting & Deep Focus timer, hardware step counter (`Sensor.TYPE_STEP_COUNTER`, works without restricted Usage Stats), and workout logging.
+  - *Plan*: daily habits & supplements checklist with weekly consistency bar, Today's calendar & reminders, recent calls, and device status.
+- **Subscriptions & Bills hub (`Subs`).** Focused strictly on recurring subscriptions and open bills with monthly/yearly burn, category breakdown donut, free-trial alerts, pause/remove/add controls, and bill resolution (removed SMS daily spend/budget clutter).
+- **Proactive notifications.** Configurable Android notifications and in-app nudges for upcoming subscription renewals, bills, deliveries, missed calls, planner reminders, and cycle reminders.
+- **Version-safe persistence.** Preserves selected tabs, sub-tabs, inbox filters, profile/goals, habits, meals, sleep, workouts, steps, timers, and cycle history across app restarts and upgrades.
+
 ## [1.2.0] - 2026-11-23
 
 ### Fixed

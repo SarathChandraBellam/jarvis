@@ -15,8 +15,8 @@ android {
     applicationId = "com.jarvis.hud"
     minSdk = 26
     targetSdk = 37
-    versionCode = 4
-    versionName = "1.2.0"
+    versionCode = 5
+    versionName = "2.0.0"
   }
 
   // Release signing reads a properties file kept OUTSIDE the repo.
