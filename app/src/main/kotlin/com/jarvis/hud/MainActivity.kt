@@ -81,6 +81,9 @@ class MainActivity : ComponentActivity() {
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
         add(Manifest.permission.POST_NOTIFICATIONS)
       }
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        add(Manifest.permission.ACTIVITY_RECOGNITION)
+      }
     }.toTypedArray()
   }
 }

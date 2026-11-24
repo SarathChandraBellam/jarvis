@@ -2,6 +2,7 @@ package com.jarvis.hud.insights
 
 import com.jarvis.hud.model.AppUsageStat
 import com.jarvis.hud.model.CallSummary
+import com.jarvis.hud.model.CycleState
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.IntelCategory
@@ -20,8 +21,8 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
- * Pure Kotlin proactive alert engine: decides which gentle, timely nudges Jarvis should surface
- * in-app and via local Android notifications.
+ * Pure Kotlin proactive alert engine: generates gentle, actionable nudges for subscription
+ * renewals, open bills, deliveries, missed calls, planner reminders, and daily focus/movement.
  */
 object ProactivePlanner {
 
@@ -34,6 +35,7 @@ object ProactivePlanner {
     briefing: DailyBriefing?,
     settings: JarvisSettings,
     dismissedKeys: Set<String>,
+    cycleState: CycleState = CycleState(),
     now: Long = System.currentTimeMillis(),
     zone: ZoneId = ZoneId.systemDefault(),
   ): List<ProactiveAlert> {
@@ -43,7 +45,6 @@ object ProactivePlanner {
     val dayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
     val alerts = mutableListOf<ProactiveAlert>()
 
-    // 1. Upcoming subscription renewals & free-trial endings.
     val lead = settings.renewalLeadDays.coerceIn(1, 14).toLong()
     subscriptions.filterNot { it.isPaused }.forEach { sub ->
       val days = SubscriptionInsights.daysUntil(sub.nextRenewalDate, today)
@@ -68,7 +69,6 @@ object ProactivePlanner {
       }
     }
 
-    // 2. Open bills due soon or overdue.
     items.filter { it.category == IntelCategory.BILL && it.status == ItemStatus.ACTIVE }.forEach { bill ->
       val due = bill.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
       val days = due?.let { ChronoUnit.DAYS.between(today, it) }
@@ -94,7 +94,6 @@ object ProactivePlanner {
       }
     }
 
-    // 3. Deliveries out for delivery today.
     items.filter {
       it.category == IntelCategory.DELIVERY &&
         it.status == ItemStatus.ACTIVE &&
@@ -112,7 +111,6 @@ object ProactivePlanner {
       )
     }
 
-    // 4. Missed calls from today.
     recentCalls
       .filter { "MISS" in it.callType.uppercase() && it.timestamp >= dayStart }
       .take(2)
@@ -129,7 +127,6 @@ object ProactivePlanner {
         )
       }
 
-    // 5. Planner reminders scheduled for today that aren't done yet.
     val nowMinutes = nowZ.hour * 60 + nowZ.minute
     reminders
       .filter { !it.isDone && it.dateKey == todayKey && it.notifyProactively && it.minutesOfDay <= nowMinutes + 60 }
@@ -155,7 +152,6 @@ object ProactivePlanner {
         )
       }
 
-    // 6. Gentle screen-time focus nudge.
     val totalUsage = appUsage.sumOf { it.foregroundMinutes }
     val goal = settings.dailyFocusGoalMinutes.coerceAtLeast(30)
     if (totalUsage > goal) {
@@ -174,7 +170,28 @@ object ProactivePlanner {
       )
     }
 
-    // 7. Morning briefing digest alert.
+    if (settings.cycleTrackingEnabled) {
+      val cyc = CycleSummary.from(cycleState, today)
+      val daysTo = cyc.daysToNextPeriod
+      if (cyc.hasData && daysTo != null && daysTo in 0..2) {
+        val whenText = when (daysTo) {
+          0 -> "expected today"
+          1 -> "expected tomorrow"
+          else -> "expected in $daysTo days"
+        }
+        alerts += ProactiveAlert(
+          id = "pa-cycle-$todayKey",
+          dedupKey = "cycle:${cyc.nextPeriodDate}:$todayKey",
+          kind = ProactiveKind.CYCLE,
+          title = "Period $whenText",
+          body = "Day ${cyc.cycleDay} (${cyc.phase.label}) — ${cyc.phase.tagline}.",
+          priority = Priority.NORMAL,
+          timestamp = now,
+          targetTab = HudTab.HUD,
+        )
+      }
+    }
+
     if (briefing != null && nowZ.hour >= settings.morningBriefingHour.coerceIn(5, 12)) {
       alerts += ProactiveAlert(
         id = "pa-brief-$todayKey",

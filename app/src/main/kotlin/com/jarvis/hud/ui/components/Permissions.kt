@@ -9,7 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.HourglassBottom
+import androidx.compose.material.icons.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Sms
@@ -39,14 +39,13 @@ private fun accessList(
   p: PermissionStatus,
   onRequestRuntime: () -> Unit,
   onOpenNotificationAccess: () -> Unit,
-  onOpenUsageAccess: () -> Unit,
   includePostNotifications: Boolean = false,
 ) = buildList {
-  add(Access("SMS", "Subscription alerts, bills and deliveries", Icons.Outlined.Sms, p.smsGranted, onRequestRuntime))
+  add(Access("SMS", "Subscriptions, renewals and deliveries", Icons.Outlined.Sms, p.smsGranted, onRequestRuntime))
   add(Access("Notifications", "App alerts, renewals and messages", Icons.Outlined.Notifications, p.notificationAccessGranted, onOpenNotificationAccess))
   add(Access("Calendar", "Today's schedule and planner", Icons.Outlined.CalendarMonth, p.calendarGranted, onRequestRuntime))
   add(Access("Call log", "Recent and missed call nudges", Icons.Outlined.Call, p.callLogGranted, onRequestRuntime))
-  add(Access("Screen time", "Focus insights and gentle nudges", Icons.Outlined.HourglassBottom, p.usageAccessGranted, onOpenUsageAccess))
+  add(Access("Motion & steps", "Phone's built-in step counter sensor", Icons.Outlined.DirectionsWalk, p.activityRecognitionGranted, onRequestRuntime))
   if (includePostNotifications) {
     add(Access("Proactive alerts", "Renewal reminders and morning digests", Icons.Outlined.NotificationsActive, p.notificationsPostGranted, onRequestRuntime))
   }
@@ -57,12 +56,12 @@ fun PermissionList(
   permissions: PermissionStatus,
   onRequestRuntime: () -> Unit,
   onOpenNotificationAccess: () -> Unit,
-  onOpenUsageAccess: () -> Unit,
+  @Suppress("UNUSED_PARAMETER") onOpenUsageAccess: () -> Unit,
   modifier: Modifier = Modifier,
   onlyMissing: Boolean = false,
   includePostNotifications: Boolean = false,
 ) {
-  val rows = accessList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess, includePostNotifications)
+  val rows = accessList(permissions, onRequestRuntime, onOpenNotificationAccess, includePostNotifications)
     .filter { !onlyMissing || !it.granted }
   Column(modifier) {
     rows.forEach { a ->
@@ -87,6 +86,7 @@ fun PermissionList(
   }
 }
 
+/** Setup card nudging the user for optional phone access (no restricted Screen Time nag). */
 @Composable
 fun SetupCard(
   permissions: PermissionStatus,
@@ -95,19 +95,27 @@ fun SetupCard(
   onOpenUsageAccess: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val granted = permissions.grantedCount
-  if (granted == 5 && permissions.notificationsPostGranted) return
+  val missingCore = listOf(
+    permissions.smsGranted,
+    permissions.notificationAccessGranted,
+    permissions.calendarGranted,
+    permissions.callLogGranted,
+    permissions.activityRecognitionGranted,
+    permissions.notificationsPostGranted,
+  ).count { !it }
+  if (missingCore == 0) return
+  val connected = 6 - missingCore
   BentoCard(modifier = modifier, pastelBg = HudColors.SlateBlueSoft) {
     Text("Finish setting up", style = JarvisType.SectionSerif, color = HudColors.Text)
     Spacer(Modifier.height(4.dp))
     Text(
-      "$granted of 5 sources connected. Jarvis stays local on this phone.",
+      "$connected of 6 optional sources connected. Works offline with your logs too.",
       style = MaterialTheme.typography.bodySmall,
       color = HudColors.TextDim,
     )
     Spacer(Modifier.height(10.dp))
-    Meter(granted / 5f, HudColors.SlateBlue)
+    Meter(connected / 6f, HudColors.SlateBlue)
     Spacer(Modifier.height(6.dp))
-    PermissionList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess, onlyMissing = true)
+    PermissionList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess, onlyMissing = true, includePostNotifications = true)
   }
 }

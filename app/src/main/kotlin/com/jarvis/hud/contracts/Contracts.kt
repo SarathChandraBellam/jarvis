@@ -5,26 +5,27 @@ import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
 import com.jarvis.hud.model.ConnectionTestResult
+import com.jarvis.hud.model.CycleState
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.DeviceTelemetry
+import com.jarvis.hud.model.HabitItem
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
 import com.jarvis.hud.model.PlannerReminder
 import com.jarvis.hud.model.ProactiveAlert
 import com.jarvis.hud.model.RawEvent
+import com.jarvis.hud.model.SleepLog
+import com.jarvis.hud.model.TimerMode
+import com.jarvis.hud.model.TimerSession
 import com.jarvis.hud.model.TrackedSubscription
+import com.jarvis.hud.model.WorkoutLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-
-/*
- * SHARED CONTRACTS between the data, AI and UI layers.
- * All suspend functions must be main-safe (switch to Dispatchers.IO internally) and must
- * never throw for expected failures (missing permission, no network): return empty/failed results.
- */
 
 interface PhoneDataSource {
   suspend fun readSms(sinceMillis: Long, limit: Int = 200): List<RawEvent>
@@ -32,6 +33,11 @@ interface PhoneDataSource {
   suspend fun readRecentCalls(limit: Int = 30): List<CallSummary>
   suspend fun readAppUsage(sinceMillis: Long, top: Int = 10): List<AppUsageStat>
   fun readTelemetry(): DeviceTelemetry
+}
+
+/** Optional hardware step-counter reader (falls back cleanly when no sensor/permission). */
+interface StepSensorSource {
+  suspend fun readTodaySteps(): Int?
 }
 
 interface NotificationFeed {
@@ -92,7 +98,7 @@ interface IntelStore {
   suspend fun clear()
 }
 
-/** Persists user-created reminders, custom/paused subscriptions, and proactive alert states. */
+/** Persists reminders, custom/paused subscriptions, proactive alert state, and personal wellness logs. */
 interface PlannerStore {
   val reminders: StateFlow<List<PlannerReminder>>
   val customSubscriptions: StateFlow<List<TrackedSubscription>>
@@ -100,6 +106,14 @@ interface PlannerStore {
   val deletedSubscriptionIds: StateFlow<Set<String>>
   val dismissedAlertKeys: StateFlow<Set<String>>
   val notifiedAlertKeys: StateFlow<Set<String>>
+
+  val meals: StateFlow<List<MealLog>>
+  val sleepLogs: StateFlow<List<SleepLog>>
+  val workouts: StateFlow<List<WorkoutLog>>
+  val habits: StateFlow<List<HabitItem>>
+  val stepsByDate: StateFlow<Map<String, Int>>
+  val timerSession: StateFlow<TimerSession>
+  val cycleState: StateFlow<CycleState>
 
   suspend fun addReminder(reminder: PlannerReminder)
   suspend fun toggleReminder(id: String)
@@ -111,9 +125,22 @@ interface PlannerStore {
 
   suspend fun dismissAlert(dedupKey: String)
   suspend fun markNotified(dedupKeys: Collection<String>)
+
+  suspend fun addMeal(meal: MealLog)
+  suspend fun deleteMeal(id: String)
+  suspend fun saveSleep(sleep: SleepLog)
+  suspend fun addWorkout(workout: WorkoutLog)
+  suspend fun deleteWorkout(id: String)
+  suspend fun toggleHabit(habitId: String, dateKey: String)
+  suspend fun addHabit(habit: HabitItem)
+  suspend fun deleteHabit(habitId: String)
+  suspend fun recordSteps(dateKey: String, steps: Int)
+  suspend fun startTimer(mode: TimerMode, targetMinutes: Int, nowMillis: Long, dateKey: String)
+  suspend fun stopTimer(nowMillis: Long, dateKey: String)
+  suspend fun togglePeriodDay(dateKey: String)
+  suspend fun setCycleLength(days: Int)
 }
 
-/** Dispatches local Android proactive notifications cleanly. */
 interface ProactiveNotifier {
   fun notifyAlerts(alerts: List<ProactiveAlert>, settings: JarvisSettings, alreadyNotified: Set<String>): List<String>
   fun sendTestNotification(callsign: String): Boolean
@@ -128,6 +155,7 @@ interface Speaker {
 
 interface JarvisContainer {
   val phoneData: PhoneDataSource
+  val stepSensor: StepSensorSource
   val notifications: NotificationFeed
   val permissions: PermissionChecker
   val settingsRepo: SettingsRepository

@@ -13,24 +13,32 @@ import com.jarvis.hud.contracts.PlannerStore
 import com.jarvis.hud.contracts.ProactiveNotifier
 import com.jarvis.hud.contracts.SettingsRepository
 import com.jarvis.hud.contracts.Speaker
+import com.jarvis.hud.contracts.StepSensorSource
 import com.jarvis.hud.model.AppUsageStat
 import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
 import com.jarvis.hud.model.ConnectionTestResult
+import com.jarvis.hud.model.CycleState
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.DeviceTelemetry
+import com.jarvis.hud.model.HabitItem
 import com.jarvis.hud.model.IntelCategory
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
 import com.jarvis.hud.model.PlannerReminder
 import com.jarvis.hud.model.ProactiveAlert
 import com.jarvis.hud.model.RawEvent
+import com.jarvis.hud.model.SleepLog
+import com.jarvis.hud.model.TimerMode
+import com.jarvis.hud.model.TimerSession
 import com.jarvis.hud.model.TrackedSubscription
+import com.jarvis.hud.model.WorkoutLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,6 +66,11 @@ class FakePhoneData : PhoneDataSource {
   override fun readTelemetry() = DeviceTelemetry(50, true, 10f, 100f)
 }
 
+class FakeStepSensor : StepSensorSource {
+  var steps: Int? = 4200
+  override suspend fun readTodaySteps(): Int? = steps
+}
+
 class FakeNotifications : NotificationFeed {
   val flow = MutableSharedFlow<RawEvent>(extraBufferCapacity = 16)
   var buffered: List<RawEvent> = listOf(rawEvent("d2", DataSource.NOTIFICATION))
@@ -66,7 +79,7 @@ class FakeNotifications : NotificationFeed {
 }
 
 class FakePermissions : PermissionChecker {
-  var status = PermissionStatus(true, false, true, false, false, true)
+  var status = PermissionStatus(true, false, true, false, false, true, true)
   override fun current() = status
 }
 
@@ -163,19 +176,20 @@ class FakePlannerStore : PlannerStore {
   override val deletedSubscriptionIds = MutableStateFlow<Set<String>>(emptySet())
   override val dismissedAlertKeys = MutableStateFlow<Set<String>>(emptySet())
   override val notifiedAlertKeys = MutableStateFlow<Set<String>>(emptySet())
+  override val meals = MutableStateFlow<List<MealLog>>(emptyList())
+  override val sleepLogs = MutableStateFlow<List<SleepLog>>(emptyList())
+  override val workouts = MutableStateFlow<List<WorkoutLog>>(emptyList())
+  override val habits = MutableStateFlow<List<HabitItem>>(emptyList())
+  override val stepsByDate = MutableStateFlow<Map<String, Int>>(emptyMap())
+  override val timerSession = MutableStateFlow(TimerSession())
+  override val cycleState = MutableStateFlow(CycleState())
 
-  override suspend fun addReminder(reminder: PlannerReminder) {
-    reminders.value = reminders.value + reminder
-  }
+  override suspend fun addReminder(reminder: PlannerReminder) { reminders.value = reminders.value + reminder }
   override suspend fun toggleReminder(id: String) {
     reminders.value = reminders.value.map { if (it.id == id) it.copy(isDone = !it.isDone) else it }
   }
-  override suspend fun deleteReminder(id: String) {
-    reminders.value = reminders.value.filterNot { it.id == id }
-  }
-  override suspend fun addSubscription(sub: TrackedSubscription) {
-    customSubscriptions.value = customSubscriptions.value + sub
-  }
+  override suspend fun deleteReminder(id: String) { reminders.value = reminders.value.filterNot { it.id == id } }
+  override suspend fun addSubscription(sub: TrackedSubscription) { customSubscriptions.value = customSubscriptions.value + sub }
   override suspend fun toggleSubscriptionPaused(id: String) {
     pausedSubscriptionIds.value = if (id in pausedSubscriptionIds.value) pausedSubscriptionIds.value - id else pausedSubscriptionIds.value + id
   }
@@ -183,11 +197,34 @@ class FakePlannerStore : PlannerStore {
     customSubscriptions.value = customSubscriptions.value.filterNot { it.id == id }
     deletedSubscriptionIds.value = deletedSubscriptionIds.value + id
   }
-  override suspend fun dismissAlert(dedupKey: String) {
-    dismissedAlertKeys.value = dismissedAlertKeys.value + dedupKey
+  override suspend fun dismissAlert(dedupKey: String) { dismissedAlertKeys.value = dismissedAlertKeys.value + dedupKey }
+  override suspend fun markNotified(dedupKeys: Collection<String>) { notifiedAlertKeys.value = notifiedAlertKeys.value + dedupKeys }
+  override suspend fun addMeal(meal: MealLog) { meals.value = meals.value + meal }
+  override suspend fun deleteMeal(id: String) { meals.value = meals.value.filterNot { it.id == id } }
+  override suspend fun saveSleep(sleep: SleepLog) { sleepLogs.value = sleepLogs.value.filterNot { it.dateKey == sleep.dateKey } + sleep }
+  override suspend fun addWorkout(workout: WorkoutLog) { workouts.value = workouts.value + workout }
+  override suspend fun deleteWorkout(id: String) { workouts.value = workouts.value.filterNot { it.id == id } }
+  override suspend fun toggleHabit(habitId: String, dateKey: String) {
+    habits.value = habits.value.map { h ->
+      if (h.id != habitId) h else h.copy(completedDateKeys = if (dateKey in h.completedDateKeys) h.completedDateKeys - dateKey else h.completedDateKeys + dateKey)
+    }
   }
-  override suspend fun markNotified(dedupKeys: Collection<String>) {
-    notifiedAlertKeys.value = notifiedAlertKeys.value + dedupKeys
+  override suspend fun addHabit(habit: HabitItem) { habits.value = habits.value + habit }
+  override suspend fun deleteHabit(habitId: String) { habits.value = habits.value.filterNot { it.id == habitId } }
+  override suspend fun recordSteps(dateKey: String, steps: Int) { stepsByDate.value = stepsByDate.value + (dateKey to steps) }
+  override suspend fun startTimer(mode: TimerMode, targetMinutes: Int, nowMillis: Long, dateKey: String) {
+    timerSession.value = timerSession.value.copy(isRunning = true, mode = mode, startedAtMillis = nowMillis, targetMinutes = targetMinutes, lastDateKey = dateKey)
+  }
+  override suspend fun stopTimer(nowMillis: Long, dateKey: String) {
+    timerSession.value = timerSession.value.copy(isRunning = false, lastDateKey = dateKey)
+  }
+  override suspend fun togglePeriodDay(dateKey: String) {
+    val cur = cycleState.value
+    val next = if (dateKey in cur.periodStartDates) cur.periodStartDates - dateKey else (cur.periodStartDates + dateKey).sorted()
+    cycleState.value = cur.copy(periodStartDates = next)
+  }
+  override suspend fun setCycleLength(days: Int) {
+    cycleState.value = cycleState.value.copy(cycleLengthDays = days.coerceIn(21, 45))
   }
 }
 
@@ -216,6 +253,7 @@ class FakeSpeaker : Speaker {
 
 class FakeContainer(
   override val phoneData: FakePhoneData = FakePhoneData(),
+  override val stepSensor: FakeStepSensor = FakeStepSensor(),
   override val notifications: FakeNotifications = FakeNotifications(),
   override val permissions: FakePermissions = FakePermissions(),
   override val settingsRepo: FakeSettingsRepo = FakeSettingsRepo(),

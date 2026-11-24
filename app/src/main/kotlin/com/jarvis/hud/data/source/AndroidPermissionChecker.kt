@@ -24,6 +24,11 @@ class AndroidPermissionChecker(context: Context) : PermissionChecker {
     } else {
       NotificationManagerCompat.from(appContext).areNotificationsEnabled()
     }
+    val activityGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      appContext.hasPermission(Manifest.permission.ACTIVITY_RECOGNITION)
+    } else {
+      true
+    }
     return PermissionStatus(
       smsGranted = appContext.hasPermission(Manifest.permission.READ_SMS),
       notificationAccessGranted = appContext.hasNotificationAccess(),
@@ -31,6 +36,7 @@ class AndroidPermissionChecker(context: Context) : PermissionChecker {
       callLogGranted = appContext.hasPermission(Manifest.permission.READ_CALL_LOG),
       usageAccessGranted = appContext.hasUsageAccess(),
       notificationsPostGranted = postGranted,
+      activityRecognitionGranted = activityGranted,
     )
   }
 }

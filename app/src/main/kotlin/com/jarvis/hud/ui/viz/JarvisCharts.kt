@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -670,6 +672,262 @@ fun ConsistencyStrip(
     if (caption.isNotBlank()) {
       Spacer(Modifier.height(10.dp))
       Text(caption, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim)
+    }
+  }
+}
+
+/**
+ * 4-phase continuous Cycle Ring modeled after @itspsneha's Cycle screen:
+ * Menstrual (blush), Follicular (sage), Mid-cycle (sand), Luteal (lavender),
+ * with a dark marker dot showing exact current cycle day.
+ */
+@Composable
+fun CyclePhaseRingCard(
+  cycleDay: Int,
+  averageLength: Int,
+  phaseLabel: String,
+  progressFraction: Float,
+  onLogPeriodToday: () -> Unit,
+  isTodayLogged: Boolean,
+  modifier: Modifier = Modifier,
+) {
+  BentoCard(modifier = modifier, padding = 18.dp) {
+    Box(Modifier.fillMaxWidth().height(216.dp), contentAlignment = Alignment.Center) {
+      Canvas(
+        Modifier
+          .size(204.dp)
+          .semantics { contentDescription = "Cycle day $cycleDay of $averageLength, $phaseLabel" },
+      ) {
+        val sw = 12.dp.toPx()
+        val pad = sw / 2f + 8.dp.toPx()
+        val arcSz = Size(size.width - pad * 2, size.height - pad * 2)
+        val topLeft = Offset(pad, pad)
+        val phases = listOf(
+          0.17f to HudColors.Blush.copy(alpha = 0.65f),
+          0.27f to HudColors.Sage.copy(alpha = 0.65f),
+          0.16f to HudColors.Sand.copy(alpha = 0.75f),
+          0.40f to HudColors.Lavender.copy(alpha = 0.65f),
+        )
+        val gap = 4f
+        val avail = 360f - gap * phases.size
+        var angle = -90f
+        phases.forEach { (frac, col) ->
+          val sweep = avail * frac
+          drawArc(
+            color = col,
+            startAngle = angle,
+            sweepAngle = sweep,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSz,
+            style = Stroke(sw, cap = StrokeCap.Round),
+          )
+          angle += sweep + gap
+        }
+
+        // Current day dot on the ring.
+        val markerAngle = Math.toRadians((-90f + 360f * progressFraction.coerceIn(0.02f, 0.99f)).toDouble())
+        val r = arcSz.width / 2f
+        val dot = Offset(center.x + (r * cos(markerAngle)).toFloat(), center.y + (r * sin(markerAngle)).toFloat())
+        drawCircle(HudColors.Surface, radius = 7.dp.toPx(), center = dot)
+        drawCircle(HudColors.Cream, radius = 4.6.dp.toPx(), center = dot)
+      }
+
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Day", style = MaterialTheme.typography.labelMedium, color = HudColors.TextMuted)
+        Text("$cycleDay", style = JarvisType.HeroSerif, color = HudColors.Text)
+        Spacer(Modifier.height(4.dp))
+        Box(
+          Modifier
+            .clip(CircleShape)
+            .background(HudColors.SandSoft)
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        ) {
+          Text("✦ $phaseLabel", style = MaterialTheme.typography.labelSmall, color = HudColors.Sand)
+        }
+      }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+      listOf(
+        "Menstrual" to HudColors.Blush,
+        "Follicular" to HudColors.Sage,
+        "Mid-cycle" to HudColors.Sand,
+        "Luteal" to HudColors.Lavender,
+      ).forEachIndexed { i, (label, col) ->
+        if (i > 0) Spacer(Modifier.width(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Box(Modifier.size(7.dp).clip(CircleShape).background(col))
+          Spacer(Modifier.width(4.dp))
+          Text(label, style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim)
+        }
+      }
+    }
+    Spacer(Modifier.height(14.dp))
+    Box(
+      Modifier
+        .fillMaxWidth()
+        .clip(CircleShape)
+        .background(if (isTodayLogged) HudColors.Cream else HudColors.BlushSoft)
+        .clickable(role = Role.Button, onClick = onLogPeriodToday)
+        .padding(vertical = 11.dp),
+      contentAlignment = Alignment.Center,
+    ) {
+      Text(
+        if (isTodayLogged) "Period logged today (tap to undo)" else "Log period today",
+        style = MaterialTheme.typography.labelLarge,
+        color = if (isTodayLogged) HudColors.OnCream else HudColors.Blush,
+      )
+    }
+  }
+}
+
+/**
+ * 7-day soft blush vertical bar chart for Steps (@itspsneha style).
+ */
+@Composable
+fun StepsBarChartCard(
+  todaySteps: Int,
+  sevenDayAvg: Int,
+  days: List<Pair<String, Int>>,
+  onAddStepsClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val maxV = (days.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
+  BentoCard(modifier = modifier, padding = 16.dp) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+      Column(Modifier.weight(1f)) {
+        Text("Steps", style = MaterialTheme.typography.labelMedium, color = HudColors.Blush)
+        Spacer(Modifier.height(2.dp))
+        Text("%,d".format(todaySteps), style = JarvisType.TitleSerif, color = HudColors.Text)
+      }
+      Column(horizontalAlignment = Alignment.End) {
+        Text("%,d".format(sevenDayAvg), style = JarvisType.MetricMedium, color = HudColors.Text)
+        Text("7-day average", style = MaterialTheme.typography.labelSmall, color = HudColors.TextMuted)
+      }
+    }
+    Spacer(Modifier.height(16.dp))
+    Row(
+      Modifier.fillMaxWidth().height(84.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.Bottom,
+    ) {
+      days.forEachIndexed { idx, (label, count) ->
+        val frac = (count.toFloat() / maxV.toFloat()).coerceIn(0.08f, 1f)
+        val isToday = idx == days.lastIndex
+        Column(
+          Modifier.weight(1f).fillMaxHeight(),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Bottom,
+        ) {
+          Box(
+            Modifier
+              .fillMaxWidth(0.68f)
+              .fillMaxHeight(frac * 0.78f)
+              .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
+              .background(if (isToday) HudColors.Blush.copy(alpha = 0.75f) else HudColors.BlushSoft),
+          )
+          Spacer(Modifier.height(6.dp))
+          Text(label, style = MaterialTheme.typography.labelSmall, color = if (isToday) HudColors.Text else HudColors.TextMuted)
+        }
+      }
+    }
+    Spacer(Modifier.height(10.dp))
+    Box(
+      Modifier
+        .clip(CircleShape)
+        .background(HudColors.SurfaceHigh)
+        .clickable(role = Role.Button, onClick = onAddStepsClick)
+        .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+      Text("+ Update steps", style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim)
+    }
+  }
+}
+
+/**
+ * 7-day mini sleep progress rings row (Sun..Sat) inspired by @itspsneha's Sleep header.
+ */
+@Composable
+fun MiniWeekSleepRingsRow(
+  days: List<Pair<String, Float>>,
+  modifier: Modifier = Modifier,
+) {
+  Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    days.forEach { (label, frac) ->
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = HudColors.TextMuted)
+        Spacer(Modifier.height(6.dp))
+        Canvas(Modifier.size(28.dp)) {
+          val sw = 3.dp.toPx()
+          drawArc(
+            color = HudColors.SlateBlue.copy(alpha = 0.16f),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            style = Stroke(sw, cap = StrokeCap.Round),
+          )
+          if (frac > 0.01f) {
+            drawArc(
+              color = HudColors.SlateBlue,
+              startAngle = -90f,
+              sweepAngle = 360f * frac.coerceIn(0f, 1f),
+              useCenter = false,
+              style = Stroke(sw, cap = StrokeCap.Round),
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 3-column macro progress bars (Ojas style) + stacked proportional macro bar (Sneha style).
+ */
+@Composable
+fun MacroTripleBars(
+  proteinG: Int,
+  proteinGoal: Int,
+  carbsG: Int,
+  carbsGoal: Int,
+  fatG: Int,
+  fatGoal: Int,
+  modifier: Modifier = Modifier,
+) {
+  val totalG = (proteinG + carbsG + fatG).coerceAtLeast(1)
+  Column(modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+      val pW = (proteinG.toFloat() / totalG).coerceAtLeast(0.05f)
+      val cW = (carbsG.toFloat() / totalG).coerceAtLeast(0.05f)
+      val fW = (fatG.toFloat() / totalG).coerceAtLeast(0.05f)
+      Box(Modifier.weight(pW).fillMaxHeight().background(HudColors.Blush))
+      Box(Modifier.weight(cW).fillMaxHeight().background(HudColors.Sand))
+      Box(Modifier.weight(fW).fillMaxHeight().background(HudColors.Lavender))
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      MacroColumn("Protein", proteinG, proteinGoal, HudColors.Blush, Modifier.weight(1f))
+      MacroColumn("Carbs", carbsG, carbsGoal, HudColors.Sand, Modifier.weight(1f))
+      MacroColumn("Fat", fatG, fatGoal, HudColors.Lavender, Modifier.weight(1f))
+    }
+  }
+}
+
+@Composable
+private fun MacroColumn(label: String, grams: Int, goal: Int, color: Color, modifier: Modifier) {
+  val frac = (grams.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f)
+  Column(modifier) {
+    Text(label, style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim)
+    Spacer(Modifier.height(2.dp))
+    Row(verticalAlignment = Alignment.Bottom) {
+      Text("$grams", style = JarvisType.MetricMedium, color = HudColors.Text)
+      Text(" / ${goal}g", style = MaterialTheme.typography.labelSmall, color = HudColors.TextMuted, modifier = Modifier.padding(bottom = 2.dp))
+    }
+    Spacer(Modifier.height(6.dp))
+    Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(color.copy(alpha = 0.18f))) {
+      if (frac > 0f) Box(Modifier.fillMaxWidth(frac).fillMaxHeight().clip(CircleShape).background(color))
     }
   }
 }

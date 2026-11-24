@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CallMade
 import androidx.compose.material.icons.automirrored.outlined.CallMissed
@@ -29,17 +31,19 @@ import androidx.compose.material.icons.automirrored.outlined.CallReceived
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.BatteryStd
+import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.HourglassBottom
+import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.SdStorage
+import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,13 +69,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.jarvis.hud.insights.CycleSummary
 import com.jarvis.hud.insights.SubscriptionInsights
+import com.jarvis.hud.insights.WellnessEngine
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.IntelCategory
 import com.jarvis.hud.model.ItemStatus
@@ -92,18 +101,17 @@ import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import com.jarvis.hud.ui.finance.rupees
 import com.jarvis.hud.ui.theme.HudColors
 import com.jarvis.hud.ui.theme.JarvisType
-import com.jarvis.hud.ui.viz.BaselineRangeBar
 import com.jarvis.hud.ui.viz.BentoCard
-import com.jarvis.hud.ui.viz.ConsistencyDay
-import com.jarvis.hud.ui.viz.ConsistencyStrip
 import com.jarvis.hud.ui.viz.DayPillItem
 import com.jarvis.hud.ui.viz.DaySelectorStrip
 import com.jarvis.hud.ui.viz.DayTimelineBar
+import com.jarvis.hud.ui.viz.DonutArcRing
 import com.jarvis.hud.ui.viz.HexRadarChart
+import com.jarvis.hud.ui.viz.MacroTripleBars
 import com.jarvis.hud.ui.viz.RadarAxis
 import com.jarvis.hud.ui.viz.ScoreRingSpec
 import com.jarvis.hud.ui.viz.ScoreRingsCard
-import com.jarvis.hud.ui.viz.SparklineAreaCard
+import com.jarvis.hud.ui.viz.StepsBarChartCard
 import com.jarvis.hud.ui.viz.TimelineDot
 import com.jarvis.hud.ui.viz.TimelineSpan
 import java.time.DayOfWeek
@@ -115,11 +123,12 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
+private enum class TodayModal { REMINDER, MEAL, SLEEP, WORKOUT, STEPS, HABIT }
+
 /**
- * Calm personal Today screen: 7-day sand context strip, blush insight banner,
- * 3 score rings, proactive nudges, Smart Day Planner with quick reminders,
- * 24-hour day timeline, Focus & Screen-Time Insights, Daily Balance hex radar,
- * and priority inbox items.
+ * Calm personal Today hub combining @itspsneha + Ojas features:
+ * Overview | Food | Cycle | Sleep | Plan — powered by hardware steps, local/AI food logging,
+ * period/cycle phase insights, fasting/focus timer, daily habits, day planner, and proactive alerts.
  */
 @Composable
 fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
@@ -127,7 +136,7 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
   val zone = remember { ZoneId.systemDefault() }
   val todayDate = remember(now) { Instant.ofEpochMilli(now).atZone(zone).toLocalDate() }
   var selectedDayOffset by remember { mutableIntStateOf(0) }
-  var showAddReminder by remember { mutableStateOf(false) }
+  var activeModal by remember { mutableStateOf<TodayModal?>(null) }
 
   val selectedDate = todayDate.plusDays(selectedDayOffset.toLong())
   val selectedDateKey = selectedDate.toString()
@@ -158,8 +167,18 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
   val dayReminders = remember(state.reminders, selectedDateKey) {
     state.reminders.filter { it.dateKey == selectedDateKey }.sortedBy { it.minutesOfDay }
   }
-  val totalUsageMin = state.appUsageStats.sumOf { it.foregroundMinutes }
-  val focusGoalMin = state.settings.dailyFocusGoalMinutes.coerceAtLeast(30)
+  val dayMeals = remember(state.meals, selectedDateKey) { state.meals.filter { it.dateKey == selectedDateKey } }
+  val dayWorkouts = remember(state.workouts, selectedDateKey) { state.workouts.filter { it.dateKey == selectedDateKey } }
+  val daySleep = remember(state.sleepLogs, selectedDateKey) { state.sleepLogs.firstOrNull { it.dateKey == selectedDateKey } }
+  val daySteps = state.stepsByDate[selectedDateKey] ?: 0
+  val cycleSummary = remember(state.cycleState, todayDate) { CycleSummary.from(state.cycleState, todayDate) }
+
+  val subTabs = remember(state.settings.cycleTrackingEnabled) {
+    if (state.settings.cycleTrackingEnabled) listOf("Overview", "Food", "Cycle", "Sleep", "Plan")
+    else listOf("Overview", "Food", "Sleep", "Plan")
+  }
+  val rawIdx = state.settings.todayViewIndex.coerceIn(0, subTabs.lastIndex)
+  val currentSubTab = subTabs[rawIdx]
 
   Refreshable(state.isSyncing, actions::onScanAndOrganize, Modifier.fillMaxSize()) {
     LazyColumn(
@@ -167,220 +186,390 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
       contentPadding = screenPadding(contentPadding),
       verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-      item(key = "daySelector") {
-        val weekStart = todayDate.with(DayOfWeek.MONDAY)
-        val renewalDates = activeSubs.mapNotNull { it.nextRenewalDate }.toSet()
-        val billDates = active.filter { it.category == IntelCategory.BILL }.mapNotNull { it.dueDate }.toSet()
-        val reminderDates = state.reminders.filterNot { it.isDone }.map { it.dateKey }.toSet()
-        val pills = (0..6).map { offset ->
-          val d = weekStart.plusDays(offset.toLong())
-          val key = d.toString()
-          val hasMark = key in renewalDates || key in billDates || key in reminderDates
-          DayPillItem(
-            letter = d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.ENGLISH),
-            dayNumber = d.dayOfMonth.toString(),
-            isSelected = d == selectedDate,
-            hasMarker = hasMark,
-            onClick = { selectedDayOffset = java.time.temporal.ChronoUnit.DAYS.between(todayDate, d).toInt() },
-          )
-        }
-        val dayTitle = when (selectedDayOffset) {
-          0 -> "Today"
-          1 -> "Tomorrow"
-          -1 -> "Yesterday"
-          else -> selectedDate.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH))
-        }
-        DaySelectorStrip(
-          eyebrow = if (upcomingSubs.isEmpty()) "Subscriptions calm" else "${upcomingSubs.size} renewal${if (upcomingSubs.size == 1) "" else "s"} this week",
-          headline = dayTitle,
-          rightHeadline = rupees(activeSubs.sumOf { it.monthlyEquivalent }),
-          rightSub = "monthly plans",
-          days = pills,
-        )
-      }
-
-      item(key = "briefing") { BriefingCard(state, actions) }
-
-      item(key = "scoreRings") {
-        val renewalScore = (100 - upcomingSubs.size * 15 - billsDue * 12).coerceIn(25, 100)
-        val focusScore = (100 - (totalUsageMin * 60 / focusGoalMin).toInt()).coerceIn(20, 100)
-        val inboxScore = (100 - active.size * 6).coerceIn(25, 100)
-        val guidance = when {
-          urgent.isNotEmpty() -> "Take it steady today. ${urgent.size} priority item${if (urgent.size == 1) "" else "s"} waiting below."
-          state.proactiveAlerts.isNotEmpty() -> "Gentle rhythm — ${state.proactiveAlerts.size} proactive nudge${if (state.proactiveAlerts.size == 1) "" else "s"} queued."
-          else -> "Everything is calm and clear today."
-        }
-        ScoreRingsCard(
-          rings = listOf(
-            ScoreRingSpec("Renewals", "$renewalScore", renewalScore / 100f, HudColors.SlateBlue) {
-              actions.onSelectTab(HudTab.FINANCE)
-            },
-            ScoreRingSpec("Focus", "$focusScore", focusScore / 100f, HudColors.Blush),
-            ScoreRingSpec("Inbox", "$inboxScore", inboxScore / 100f, HudColors.Lavender) {
-              actions.onSelectTab(HudTab.INTEL)
-            },
-          ),
-          guidance = guidance,
-        )
-      }
-
-      if (state.proactiveAlerts.isNotEmpty()) {
-        item(key = "proactive") {
-          SectionHeader("Proactive nudges", trailing = "${state.proactiveAlerts.size} active")
-          Spacer(Modifier.height(4.dp))
-          ProactiveAlertsCard(
-            alerts = state.proactiveAlerts.take(3),
-            onOpenTab = { it?.let(actions::onSelectTab) },
-            onDismiss = actions::onDismissProactiveAlert,
-          )
-        }
-      }
-
-      item(key = "urgentHeader") {
-        SectionHeader("Needs attention", trailing = if (active.isNotEmpty()) "See all" else null, onTrailingClick = { actions.onSelectTab(HudTab.INTEL) })
-      }
-      if (urgent.isEmpty()) {
-        item(key = "urgentEmpty") {
-          BentoCard { EmptyLine("Nothing urgent. You're all caught up.") }
-        }
-      } else {
-        items(urgent, key = { "u-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, onClick = { actions.onOpenItem(it.id) }) }
-      }
-
-      item(key = "planner") {
-        SmartDayPlannerCard(
-          dateLabel = if (selectedDayOffset == 0) "Today's plan" else selectedDate.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH)),
-          events = dayEvents,
-          reminders = dayReminders,
-          onToggleReminder = actions::onToggleReminder,
-          onDeleteReminder = actions::onDeleteReminder,
-          onAddReminderClick = { showAddReminder = true },
-        )
-      }
-
-      item(key = "dayTimeline") {
-        val spans = buildList {
-          state.calendarEntries.filter { it.startTime < dayEnd && it.endTime >= dayStart }.forEach { e ->
-            val s = ((e.startTime - dayStart) / dayMillis).coerceIn(0f, 1f)
-            val en = ((e.endTime - dayStart) / dayMillis).coerceIn(s, 1f)
-            add(TimelineSpan(s, en, HudColors.Lavender))
-          }
-          state.recentCalls.filter { it.timestamp in dayStart..dayEnd }.forEach { c ->
-            val s = ((c.timestamp - dayStart) / dayMillis).coerceIn(0f, 1f)
-            val en = (s + (c.durationSec * 1000f / dayMillis).coerceAtLeast(0.015f)).coerceAtMost(1f)
-            add(TimelineSpan(s, en, if ("MISS" in c.callType.uppercase()) HudColors.Blush else HudColors.SlateBlue))
-          }
-        }
-        val dots = state.reminders.filter { it.dateKey == todayDate.toString() }.map { r ->
-          TimelineDot((r.minutesOfDay / 1440f).coerceIn(0.02f, 0.98f), HudColors.Sage, 5f)
-        }
-        val nowFrac = ((now - dayStart) / dayMillis).coerceIn(0f, 1f)
-        val summaryLine = buildList {
-          val evCount = state.calendarEntries.count { it.startTime < dayEnd && it.endTime >= dayStart }
-          val remCount = state.reminders.count { it.dateKey == todayDate.toString() && !it.isDone }
-          if (evCount > 0) add("$evCount event${if (evCount == 1) "" else "s"}")
-          if (remCount > 0) add("$remCount reminder${if (remCount == 1) "" else "s"}")
-          if (upcomingSubs.isNotEmpty()) add("${upcomingSubs.size} upcoming renewal${if (upcomingSubs.size == 1) "" else "s"}")
-        }.joinToString(" · ").ifEmpty { "Open, calm day ahead" }
-
-        DayTimelineBar(
-          spans = spans,
-          dots = dots,
-          nowFrac = nowFrac,
-          summaryLine = summaryLine,
-          legend = listOf(
-            "Events" to HudColors.Lavender,
-            "Reminders" to HudColors.Sage,
-            "Calls" to HudColors.SlateBlue,
-            "Now" to HudColors.Cream,
-          ),
-        )
-      }
-
-      item(key = "focusInsights") {
-        FocusInsightsSection(
-          totalUsageMin = totalUsageMin,
-          focusGoalMin = focusGoalMin,
-          appUsageStats = state.appUsageStats,
-          activeSubsCount = activeSubs.size,
-          monthlyBurn = activeSubs.sumOf { it.monthlyEquivalent },
-          batteryPercent = state.telemetry.batteryPercent,
-          freeStorageGb = state.telemetry.freeStorageGb,
-          onOpenSubs = { actions.onSelectTab(HudTab.FINANCE) },
-        )
-      }
-
-      item(key = "pulseRadar") {
-        val subsFrac = (1f - upcomingSubs.size * 0.14f).coerceIn(0.25f, 1f)
-        val billsFrac = (1f - billsDue * 0.2f).coerceIn(0.2f, 1f)
-        val inboxFrac = (1f - active.size * 0.06f).coerceIn(0.25f, 1f)
-        val schedFrac = if (dayEvents.isEmpty()) 0.85f else (1f - (dayEvents.size - 1) * 0.1f).coerceIn(0.4f, 0.95f)
-        val focusFrac = (1f - (totalUsageMin / (focusGoalMin * 2f))).coerceIn(0.2f, 1f)
-        val doneRems = dayReminders.count { it.isDone }
-        val routineFrac = if (dayReminders.isEmpty()) 0.80f else (doneRems / dayReminders.size.toFloat()).coerceIn(0.25f, 1f)
-
-        val axes = listOf(
-          RadarAxis("Renewals", subsFrac, "${upcomingSubs.size} due 7d"),
-          RadarAxis("Bills", billsFrac, if (billsDue == 0) "All clear" else "$billsDue open"),
-          RadarAxis("Inbox", inboxFrac, "${active.size} active"),
-          RadarAxis("Focus", focusFrac, if (totalUsageMin > 0) HudFormat.minutes(totalUsageMin) else "Calm"),
-          RadarAxis("Schedule", schedFrac, "${dayEvents.size} events"),
-          RadarAxis("Routine", routineFrac, if (dayReminders.isEmpty()) "Add task" else "$doneRems/${dayReminders.size} done"),
-        )
-        val overall = (axes.map { it.fraction }.average() * 100).roundToInt()
-        val label = when {
-          overall >= 80 -> "Calm & steady"
-          overall >= 60 -> "Balanced pace"
-          else -> "Busy rhythm"
-        }
-        HexRadarChart(axes = axes, score = overall, headline = label)
-      }
-
-      item(key = "setup") {
-        SetupCard(
-          state.permissions,
-          actions::onRequestRuntimePermissions,
-          actions::onOpenNotificationAccessSettings,
-          actions::onOpenUsageAccessSettings,
-        )
-      }
-
-      item(key = "calls") {
-        SectionHeader("Recent calls")
-        Spacer(Modifier.height(4.dp))
-        BentoCard(padding = 14.dp) {
-          if (state.recentCalls.isEmpty()) EmptyLine("No recent calls.", Modifier.padding(4.dp))
-          state.recentCalls.take(5).forEach { c ->
-            val type = c.callType.uppercase()
-            val (icon, color, label) = when {
-              "MISS" in type || "REJECT" in type -> Triple(Icons.AutoMirrored.Outlined.CallMissed, HudColors.Blush, "Missed")
-              "OUT" in type -> Triple(Icons.AutoMirrored.Outlined.CallMade, HudColors.SlateBlue, "Outgoing")
-              else -> Triple(Icons.AutoMirrored.Outlined.CallReceived, HudColors.Sage, "Incoming")
+      item(key = "todaySubTabs") {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          items(subTabs.size) { idx ->
+            val selected = idx == rawIdx
+            Box(
+              Modifier
+                .clip(CircleShape)
+                .background(if (selected) HudColors.Cream else HudColors.Surface)
+                .border(1.dp, if (selected) HudColors.Cream else HudColors.Outline, CircleShape)
+                .clickable(role = Role.Tab) { actions.onSelectTodayView(idx) }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+              Text(
+                subTabs[idx],
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected) HudColors.OnCream else HudColors.TextDim,
+              )
             }
-            ListRow(
-              title = c.nameOrNumber,
-              subtitle = "$label · ${HudFormat.relative(c.timestamp)}",
-              icon = icon,
-              tint = color,
-              trailing = { Text(HudFormat.duration(c.durationSec), style = MaterialTheme.typography.labelMedium, color = HudColors.TextMuted) },
+          }
+        }
+      }
+
+      when (currentSubTab) {
+        "Food" -> foodDiaryView(
+          state = state,
+          selectedDate = selectedDate,
+          dayMeals = dayMeals,
+          dayWorkouts = dayWorkouts,
+          onAddMeal = { activeModal = TodayModal.MEAL },
+          onDeleteMeal = actions::onDeleteMeal,
+        )
+        "Cycle" -> cycleView(
+          cycle = cycleSummary,
+          today = todayDate,
+          onTogglePeriodDate = { d -> actions.onTogglePeriodDay(d) },
+        )
+        "Sleep" -> sleepAndBodyView(
+          state = state,
+          todayDate = todayDate,
+          todaySleep = daySleep,
+          dayWorkouts = dayWorkouts,
+          onLogSleepClick = { activeModal = TodayModal.SLEEP },
+          onLogWorkoutClick = { activeModal = TodayModal.WORKOUT },
+          onLogStepsClick = { activeModal = TodayModal.STEPS },
+          onStartTimer = actions::onStartTimer,
+          onStopTimer = actions::onStopTimer,
+          onDeleteWorkout = actions::onDeleteWorkout,
+        )
+        "Plan" -> {
+          item(key = "habits") {
+            HabitCheckStripCard(
+              habits = state.habits,
+              dateKey = selectedDateKey,
+              todayDate = todayDate,
+              onToggleHabit = { hid -> actions.onToggleHabitToday(hid, selectedDateKey) },
+              onAddHabitClick = { activeModal = TodayModal.HABIT },
+            )
+          }
+          item(key = "planner") {
+            SmartDayPlannerCard(
+              dateLabel = if (selectedDayOffset == 0) "Today's plan" else selectedDate.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH)),
+              events = dayEvents,
+              reminders = dayReminders,
+              onToggleReminder = actions::onToggleReminder,
+              onDeleteReminder = actions::onDeleteReminder,
+              onAddReminderClick = { activeModal = TodayModal.REMINDER },
+            )
+          }
+          if (state.proactiveAlerts.isNotEmpty()) {
+            item(key = "proactivePlan") {
+              SectionHeader("Proactive nudges", trailing = "${state.proactiveAlerts.size} active")
+              Spacer(Modifier.height(4.dp))
+              ProactiveAlertsCard(state.proactiveAlerts, { it?.let(actions::onSelectTab) }, actions::onDismissProactiveAlert)
+            }
+          }
+          item(key = "calls") { RecentCallsCard(state) }
+          item(key = "device") { DeviceCard(state) }
+        }
+        else -> {
+          item(key = "daySelector") {
+            val weekStart = todayDate.with(DayOfWeek.MONDAY)
+            val renewalDates = activeSubs.mapNotNull { it.nextRenewalDate }.toSet()
+            val reminderDates = state.reminders.filterNot { it.isDone }.map { it.dateKey }.toSet()
+            val pills = (0..6).map { offset ->
+              val d = weekStart.plusDays(offset.toLong())
+              val key = d.toString()
+              val hasMark = key in renewalDates || key in reminderDates || d in cycleSummary.periodDaysInMonth
+              DayPillItem(
+                letter = d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.ENGLISH),
+                dayNumber = d.dayOfMonth.toString(),
+                isSelected = d == selectedDate,
+                hasMarker = hasMark,
+                onClick = { selectedDayOffset = java.time.temporal.ChronoUnit.DAYS.between(todayDate, d).toInt() },
+              )
+            }
+            val eyebrow = if (state.settings.cycleTrackingEnabled && cycleSummary.hasData) {
+              "${cycleSummary.phase.label} · Day ${cycleSummary.cycleDay}"
+            } else if (upcomingSubs.isNotEmpty()) {
+              "${upcomingSubs.size} renewal${if (upcomingSubs.size == 1) "" else "s"} this week"
+            } else {
+              "Personal companion"
+            }
+            val rightHeadline = if (state.settings.cycleTrackingEnabled && cycleSummary.daysToNextPeriod != null) {
+              "${cycleSummary.daysToNextPeriod} days"
+            } else {
+              rupees(activeSubs.sumOf { it.monthlyEquivalent })
+            }
+            val rightSub = if (state.settings.cycleTrackingEnabled && cycleSummary.daysToNextPeriod != null) {
+              "to period"
+            } else {
+              "monthly subs"
+            }
+            DaySelectorStrip(
+              eyebrow = eyebrow,
+              headline = when (selectedDayOffset) {
+                0 -> "Today"
+                1 -> "Tomorrow"
+                -1 -> "Yesterday"
+                else -> selectedDate.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH))
+              },
+              rightHeadline = rightHeadline,
+              rightSub = rightSub,
+              days = pills,
+            )
+          }
+
+          item(key = "briefing") {
+            BriefingCard(
+              state = state,
+              actions = actions,
+              calmQuotes = WellnessEngine.calmInsights(
+                sleep = daySleep,
+                steps = daySteps,
+                stepGoal = state.settings.dailyStepGoal,
+                meals = dayMeals,
+                workouts = dayWorkouts,
+              ),
+            )
+          }
+
+          item(key = "scoreRings") {
+            val sleepScore = daySleep?.qualityScore ?: state.sleepLogs.firstOrNull()?.qualityScore ?: 78
+            val stepPct = ((daySteps.toFloat() / state.settings.dailyStepGoal.coerceAtLeast(1000)) * 100f).roundToInt().coerceIn(10, 100)
+            val renewalScore = (100 - upcomingSubs.size * 15 - billsDue * 12).coerceIn(25, 100)
+            val guidance = if (state.settings.cycleTrackingEnabled && cycleSummary.hasData) {
+              "${cycleSummary.phase.label}: ${cycleSummary.phase.energyTip}"
+            } else if (urgent.isNotEmpty()) {
+              "Take it steady today. ${urgent.size} priority item${if (urgent.size == 1) "" else "s"} below."
+            } else {
+              "Take it slow today. Consistency is built gently."
+            }
+            ScoreRingsCard(
+              rings = listOf(
+                ScoreRingSpec("Sleep", "$sleepScore", sleepScore / 100f, HudColors.SlateBlue) {
+                  actions.onSelectTodayView(subTabs.indexOf("Sleep").coerceAtLeast(0))
+                },
+                ScoreRingSpec("Movement", "$stepPct", stepPct / 100f, HudColors.Blush) {
+                  actions.onSelectTodayView(subTabs.indexOf("Sleep").coerceAtLeast(0))
+                },
+                ScoreRingSpec("Renewals", "$renewalScore", renewalScore / 100f, HudColors.Lavender) {
+                  actions.onSelectTab(HudTab.FINANCE)
+                },
+              ),
+              guidance = guidance,
+            )
+          }
+
+          item(key = "quickActions") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+              QuickTile("Add meal", Icons.Outlined.Restaurant, HudColors.Blush, HudColors.BlushSoft, Modifier.weight(1f)) {
+                activeModal = TodayModal.MEAL
+              }
+              QuickTile("Add activity", Icons.Outlined.DirectionsRun, HudColors.Sand, HudColors.SandSoft, Modifier.weight(1f)) {
+                activeModal = TodayModal.WORKOUT
+              }
+              if (state.settings.cycleTrackingEnabled) {
+                QuickTile("Log period", Icons.Outlined.Spa, HudColors.SlateBlue, HudColors.SlateBlueSoft, Modifier.weight(1f)) {
+                  actions.onTogglePeriodDay(selectedDateKey)
+                }
+              } else {
+                QuickTile("Log sleep", Icons.Outlined.Bedtime, HudColors.Lavender, HudColors.LavenderSoft, Modifier.weight(1f)) {
+                  activeModal = TodayModal.SLEEP
+                }
+              }
+            }
+          }
+
+          item(key = "nutritionOverview") {
+            val eaten = dayMeals.sumOf { it.calories }
+            val burned = dayWorkouts.sumOf { it.caloriesBurned }
+            val goal = state.settings.dailyCalorieGoal.coerceAtLeast(800)
+            val left = (goal - eaten + burned).coerceAtLeast(0)
+            val frac = (eaten.toFloat() / goal).coerceIn(0f, 1f)
+            BentoCard(
+              onClick = { actions.onSelectTodayView(subTabs.indexOf("Food").coerceAtLeast(0)) },
+              padding = 16.dp,
+            ) {
+              Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                  Text("Nutrition · ${dayMeals.size} meal${if (dayMeals.size == 1) "" else "s"}", style = MaterialTheme.typography.labelMedium, color = HudColors.Blush)
+                  Spacer(Modifier.height(2.dp))
+                  Text("%,d kcal left".format(left), style = JarvisType.TitleSerif, color = HudColors.Text)
+                  Text("$eaten eaten · $burned burned · $goal goal", style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim)
+                }
+                DonutArcRing(
+                  fraction = frac,
+                  centerText = "${(frac * 100).roundToInt()}%",
+                  color = HudColors.Sand,
+                  size = 72.dp,
+                  strokeWidth = 7.dp,
+                  partialSweep = true,
+                )
+              }
+              Spacer(Modifier.height(12.dp))
+              MacroTripleBars(
+                proteinG = dayMeals.sumOf { it.proteinG },
+                proteinGoal = state.settings.dailyProteinGoalG,
+                carbsG = dayMeals.sumOf { it.carbsG },
+                carbsGoal = state.settings.dailyCarbsGoalG,
+                fatG = dayMeals.sumOf { it.fatG },
+                fatGoal = state.settings.dailyFatGoalG,
+              )
+            }
+          }
+
+          if (state.proactiveAlerts.isNotEmpty()) {
+            item(key = "proactive") {
+              SectionHeader("Proactive nudges", trailing = "${state.proactiveAlerts.size} active")
+              Spacer(Modifier.height(4.dp))
+              ProactiveAlertsCard(state.proactiveAlerts.take(3), { it?.let(actions::onSelectTab) }, actions::onDismissProactiveAlert)
+            }
+          }
+
+          item(key = "urgentHeader") {
+            SectionHeader("Needs attention", trailing = if (active.isNotEmpty()) "See all" else null, onTrailingClick = { actions.onSelectTab(HudTab.INTEL) })
+          }
+          if (urgent.isEmpty()) {
+            item(key = "urgentEmpty") {
+              BentoCard { EmptyLine("Nothing urgent. You're all caught up.") }
+            }
+          } else {
+            items(urgent, key = { "u-" + it.id }) { ItemCard(it, actions::onMarkItemStatus, onClick = { actions.onOpenItem(it.id) }) }
+          }
+
+          item(key = "dayTimeline") {
+            val spans = buildList {
+              // Sleep span (e.g. 12:30 AM - 7:15 AM if logged)
+              daySleep?.let { sl ->
+                add(TimelineSpan(0.02f, (sl.totalMinutes / 1440f).coerceIn(0.15f, 0.42f), HudColors.SlateBlue.copy(alpha = 0.45f)))
+              }
+              state.calendarEntries.filter { it.startTime < dayEnd && it.endTime >= dayStart }.forEach { e ->
+                val s = ((e.startTime - dayStart) / dayMillis).coerceIn(0f, 1f)
+                val en = ((e.endTime - dayStart) / dayMillis).coerceIn(s, 1f)
+                add(TimelineSpan(s, en, HudColors.Lavender))
+              }
+              dayWorkouts.forEach { w ->
+                val s = ((w.timestamp - dayStart) / dayMillis).coerceIn(0f, 1f)
+                val en = (s + w.durationMinutes / 1440f).coerceAtMost(1f)
+                add(TimelineSpan(s, en, HudColors.Peach))
+              }
+            }
+            val dots = buildList {
+              dayMeals.forEach { m ->
+                add(TimelineDot(((m.timestamp - dayStart) / dayMillis).coerceIn(0.03f, 0.97f), HudColors.Sand, 5.5f))
+              }
+              state.reminders.filter { it.dateKey == todayDate.toString() }.forEach { r ->
+                add(TimelineDot((r.minutesOfDay / 1440f).coerceIn(0.03f, 0.97f), HudColors.Sage, 4.5f))
+              }
+            }
+            val nowFrac = ((now - dayStart) / dayMillis).coerceIn(0f, 1f)
+            DayTimelineBar(
+              spans = spans,
+              dots = dots,
+              nowFrac = nowFrac,
+              summaryLine = "${dayMeals.size} meals · ${dayWorkouts.size} workouts · ${dayEvents.size} events",
+              legend = listOf(
+                "Sleep" to HudColors.SlateBlue,
+                "Meals" to HudColors.Sand,
+                "Activity" to HudColors.Peach,
+                "Events" to HudColors.Lavender,
+              ),
+            )
+          }
+
+          item(key = "stepsCard") {
+            val weekStart = todayDate.with(DayOfWeek.MONDAY)
+            val last7 = (0..6).map { off ->
+              val d = weekStart.plusDays(off.toLong())
+              d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.ENGLISH) to (state.stepsByDate[d.toString()] ?: 0)
+            }
+            val nonZero = last7.map { it.second }.filter { it > 0 }
+            val avgSteps = if (nonZero.isEmpty()) 0 else nonZero.average().toInt()
+            StepsBarChartCard(todaySteps = daySteps, sevenDayAvg = avgSteps, days = last7, onAddStepsClick = { activeModal = TodayModal.STEPS })
+          }
+
+          item(key = "pulseRadar") {
+            val sleepFrac = ((daySleep?.totalMinutes ?: state.sleepLogs.firstOrNull()?.totalMinutes ?: 420).toFloat() / state.settings.sleepGoalMinutes.coerceAtLeast(300)).coerceIn(0.2f, 1f)
+            val moveFrac = (daySteps.toFloat() / state.settings.dailyStepGoal.coerceAtLeast(1000)).coerceIn(0.2f, 1f)
+            val nutrFrac = if (dayMeals.isEmpty()) 0.55f else (dayMeals.sumOf { it.proteinG }.toFloat() / state.settings.dailyProteinGoalG.coerceAtLeast(40)).coerceIn(0.25f, 1f)
+            val focusFrac = (0.5f + state.timerSession.completedFocusMinutesToday / 120f).coerceIn(0.25f, 1f)
+            val doneH = state.habits.count { selectedDateKey in it.completedDateKeys }
+            val habitFrac = if (state.habits.isEmpty()) 0.75f else (doneH.toFloat() / state.habits.size).coerceIn(0.25f, 1f)
+            val subsFrac = (1f - upcomingSubs.size * 0.14f).coerceIn(0.25f, 1f)
+            val axes = listOf(
+              RadarAxis("Sleep", sleepFrac, daySleep?.let { HudFormat.minutes(it.totalMinutes.toLong()) } ?: "Log sleep"),
+              RadarAxis("Move", moveFrac, "%,d steps".format(daySteps)),
+              RadarAxis("Food", nutrFrac, "${dayMeals.sumOf { it.proteinG }}g protein"),
+              RadarAxis("Focus", focusFrac, "${state.timerSession.completedFocusMinutesToday}m today"),
+              RadarAxis("Habits", habitFrac, "$doneH/${state.habits.size} done"),
+              RadarAxis("Subs", subsFrac, "${upcomingSubs.size} due 7d"),
+            )
+            val overall = (axes.map { it.fraction }.average() * 100).roundToInt()
+            HexRadarChart(axes = axes, score = overall, headline = if (overall >= 75) "Steady glow" else "Gentle pace")
+          }
+
+          item(key = "setup") {
+            SetupCard(
+              state.permissions,
+              actions::onRequestRuntimePermissions,
+              actions::onOpenNotificationAccessSettings,
+              actions::onOpenUsageAccessSettings,
             )
           }
         }
       }
-
-      item(key = "device") { DeviceCard(state) }
     }
   }
 
-  if (showAddReminder) {
-    AddReminderSheet(
+  when (activeModal) {
+    TodayModal.REMINDER -> AddReminderSheet(
       dateKey = selectedDateKey,
-      onAdd = { title, mins ->
-        actions.onAddReminder(title, mins, selectedDateKey)
-        showAddReminder = false
-      },
-      onDismiss = { showAddReminder = false },
+      onAdd = { title, mins -> actions.onAddReminder(title, mins, selectedDateKey); activeModal = null },
+      onDismiss = { activeModal = null },
     )
+    TodayModal.MEAL -> QuickTextLogSheet(
+      title = "Log a meal",
+      subtitle = "Describe what you ate (e.g. \"2 idlis, poha and 2 boiled eggs\") — Jarvis estimates calories & macros.",
+      label = "Meal description",
+      placeholder = "Poha, idli & 2 eggs",
+      cta = "Save meal",
+      presets = listOf("Poha & 2 eggs", "Chicken biryani", "Dal, 2 rotis & paneer", "Oats & whey shake"),
+      onSubmit = { text -> actions.onLogMeal(text, selectedDateKey); activeModal = null },
+      onDismiss = { activeModal = null },
+    )
+    TodayModal.WORKOUT -> QuickWorkoutSheet(
+      onSubmit = { title, mins -> actions.onLogWorkout(title, mins, selectedDateKey); activeModal = null },
+      onDismiss = { activeModal = null },
+    )
+    TodayModal.SLEEP -> QuickSleepSheet(
+      onSubmit = { hrs, bed, wake, qual -> actions.onLogSleep(hrs, bed, wake, qual, selectedDateKey); activeModal = null },
+      onDismiss = { activeModal = null },
+    )
+    TodayModal.STEPS -> QuickNumberSheet(
+      title = "Update today's steps",
+      subtitle = "Auto-reads your phone's step sensor on refresh, or adjust manually.",
+      label = "Steps today",
+      initial = daySteps.takeIf { it > 0 }?.toString() ?: "",
+      onSubmit = { v -> actions.onLogManualSteps(v, selectedDateKey); activeModal = null },
+      onDismiss = { activeModal = null },
+    )
+    TodayModal.HABIT -> QuickTextLogSheet(
+      title = "Add daily habit or supplement",
+      subtitle = "Shows up as a quick check-off chip on your Plan view.",
+      label = "Habit or supplement",
+      placeholder = "Magnesium 400mg, 10m stretch…",
+      cta = "Add habit",
+      presets = listOf("Vitamin D3", "Magnesium 400mg", "20m Evening Walk", "Read 15 pages"),
+      onSubmit = { text -> actions.onAddHabit(text); activeModal = null },
+      onDismiss = { activeModal = null },
+    )
+    null -> Unit
+  }
+}
+
+@Composable
+private fun QuickTile(label: String, icon: ImageVector, tint: Color, pastelBg: Color, modifier: Modifier, onClick: () -> Unit) {
+  BentoCard(modifier = modifier, onClick = onClick, padding = 12.dp) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+      Box(Modifier.size(38.dp).clip(CircleShape).background(pastelBg), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp))
+      }
+      Spacer(Modifier.height(8.dp))
+      Text(label, style = MaterialTheme.typography.labelMedium, color = HudColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
   }
 }
 
@@ -394,7 +583,7 @@ private fun ProactiveAlertsCard(
     alerts.forEachIndexed { idx, alert ->
       if (idx > 0) Spacer(Modifier.height(10.dp))
       val iconColor = when (alert.kind) {
-        ProactiveKind.RENEWAL, ProactiveKind.BILL -> HudColors.Blush
+        ProactiveKind.RENEWAL, ProactiveKind.BILL, ProactiveKind.CYCLE -> HudColors.Blush
         ProactiveKind.DELIVERY -> HudColors.SlateBlue
         ProactiveKind.FOCUS -> HudColors.Peach
         else -> HudColors.Sage
@@ -432,11 +621,7 @@ private fun SmartDayPlannerCard(
   onDeleteReminder: (String) -> Unit,
   onAddReminderClick: () -> Unit,
 ) {
-  SectionHeader(
-    dateLabel,
-    trailing = "+ Reminder",
-    onTrailingClick = onAddReminderClick,
-  )
+  SectionHeader(dateLabel, trailing = "+ Reminder", onTrailingClick = onAddReminderClick)
   Spacer(Modifier.height(4.dp))
   BentoCard(padding = 16.dp) {
     if (events.isEmpty() && reminders.isEmpty()) {
@@ -512,111 +697,42 @@ private fun SmartDayPlannerCard(
 }
 
 @Composable
-private fun FocusInsightsSection(
-  totalUsageMin: Long,
-  focusGoalMin: Int,
-  appUsageStats: List<com.jarvis.hud.model.AppUsageStat>,
-  activeSubsCount: Int,
-  monthlyBurn: Double,
-  batteryPercent: Int,
-  freeStorageGb: Float,
-  onOpenSubs: () -> Unit,
-) {
-  SectionHeader("Focus & digital wellbeing", trailing = if (totalUsageMin > 0) HudFormat.minutes(totalUsageMin) else null)
+private fun RecentCallsCard(state: JarvisUiState) {
+  SectionHeader("Recent calls")
   Spacer(Modifier.height(4.dp))
-  val topApp = appUsageStats.maxByOrNull { it.foregroundMinutes }
-  val usageSeries = appUsageStats.sortedByDescending { it.foregroundMinutes }.take(5).map { it.foregroundMinutes.toFloat() }.ifEmpty { listOf(15f, 22f, 18f) }
-  val remainingMin = (focusGoalMin - totalUsageMin).coerceAtLeast(0L)
-
-  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      SparklineAreaCard(
-        title = "Screen time",
-        value = if (totalUsageMin > 0) HudFormat.minutes(totalUsageMin) else "—",
-        subtitle = topApp?.let { "Top: ${it.appName}" } ?: "Grant usage access",
-        series = usageSeries,
-        tint = HudColors.Peach,
-        pastelBg = HudColors.PeachSoft,
-        modifier = Modifier.weight(1f),
-      )
-      SparklineAreaCard(
-        title = "Focus cushion",
-        value = HudFormat.minutes(remainingMin),
-        subtitle = "of ${HudFormat.minutes(focusGoalMin.toLong())} limit",
-        series = listOf(focusGoalMin.toFloat(), (focusGoalMin - totalUsageMin * 0.5f).coerceAtLeast(0f), remainingMin.toFloat()),
-        tint = HudColors.Sage,
-        pastelBg = HudColors.SageSoft,
-        modifier = Modifier.weight(1f),
-      )
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      SparklineAreaCard(
-        title = "Subscriptions",
-        value = rupees(monthlyBurn),
-        subtitle = "$activeSubsCount active plans",
-        series = listOf(1f, activeSubsCount.coerceAtLeast(1).toFloat()),
-        tint = HudColors.Blush,
-        pastelBg = HudColors.BlushSoft,
-        modifier = Modifier.weight(1f),
-        onClick = onOpenSubs,
-      )
-      SparklineAreaCard(
-        title = "Phone health",
-        value = "$batteryPercent%",
-        subtitle = String.format(Locale.US, "%.0f GB free", freeStorageGb),
-        series = listOf(72f, 78f, batteryPercent.toFloat()),
-        tint = HudColors.SlateBlue,
-        pastelBg = HudColors.SlateBlueSoft,
-        modifier = Modifier.weight(1f),
-      )
-    }
-  }
-
-  val top = appUsageStats.sortedByDescending { it.foregroundMinutes }.take(5)
-  if (top.isNotEmpty()) {
-    Spacer(Modifier.height(10.dp))
-    BentoCard {
-      val max = (top.maxOfOrNull { it.foregroundMinutes } ?: 1L).coerceAtLeast(1L)
-      top.forEachIndexed { i, u ->
-        if (i > 0) Spacer(Modifier.height(12.dp))
-        BaselineRangeBar(
-          label = u.appName,
-          valueText = HudFormat.minutes(u.foregroundMinutes),
-          fraction = u.foregroundMinutes / max.toFloat(),
-          typicalFraction = 0.6f,
-          color = if (i == 0) HudColors.Peach else HudColors.Lavender,
-        )
+  BentoCard(padding = 14.dp) {
+    if (state.recentCalls.isEmpty()) EmptyLine("No recent calls.", Modifier.padding(4.dp))
+    state.recentCalls.take(5).forEach { c ->
+      val type = c.callType.uppercase()
+      val (icon, color, label) = when {
+        "MISS" in type || "REJECT" in type -> Triple(Icons.AutoMirrored.Outlined.CallMissed, HudColors.Blush, "Missed")
+        "OUT" in type -> Triple(Icons.AutoMirrored.Outlined.CallMade, HudColors.SlateBlue, "Outgoing")
+        else -> Triple(Icons.AutoMirrored.Outlined.CallReceived, HudColors.Sage, "Incoming")
       }
+      ListRow(
+        title = c.nameOrNumber,
+        subtitle = "$label · ${HudFormat.relative(c.timestamp)}",
+        icon = icon,
+        tint = color,
+        trailing = { Text(HudFormat.duration(c.durationSec), style = MaterialTheme.typography.labelMedium, color = HudColors.TextMuted) },
+      )
     }
   }
-
-  Spacer(Modifier.height(10.dp))
-  val days = listOf("M", "T", "W", "T", "F", "S", "S").mapIndexed { i, l ->
-    val active = i < 5
-    val c = when {
-      i == 4 && totalUsageMin > focusGoalMin -> HudColors.Blush
-      active -> HudColors.Sage
-      else -> HudColors.SurfaceHigh
-    }
-    ConsistencyDay(l, c, active = active, tooltip = "$l focus")
-  }
-  ConsistencyStrip(
-    title = "Weekly focus rhythm",
-    days = days,
-    caption = if (totalUsageMin <= focusGoalMin) "Inside your calm ${HudFormat.minutes(focusGoalMin.toLong())} daily screen limit." else "Taking short breaks keeps focus gentle.",
-  )
 }
 
 @Composable
-private fun BriefingCard(state: JarvisUiState, actions: JarvisActions) {
+private fun BriefingCard(state: JarvisUiState, actions: JarvisActions, calmQuotes: List<String>) {
   val b = state.briefing
+  val combinedHighlights = remember(b?.highlights, calmQuotes) {
+    ((b?.highlights ?: emptyList()) + calmQuotes).distinct()
+  }
   var highlightIdx by remember(b?.dateKey) { mutableIntStateOf(0) }
-  val canCycle = b != null && b.highlights.size > 1
+  val canCycle = combinedHighlights.size > 1
 
   BentoCard(
     pastelBg = HudColors.BlushSoft,
     onClick = if (canCycle) {
-      { highlightIdx = (highlightIdx + 1) % b.highlights.size }
+      { highlightIdx = (highlightIdx + 1) % combinedHighlights.size }
     } else null,
     padding = 18.dp,
   ) {
@@ -636,7 +752,7 @@ private fun BriefingCard(state: JarvisUiState, actions: JarvisActions) {
         color = HudColors.TextDim,
       )
       if (!state.isSyncing) {
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         FilledTonalButton(
           onClick = actions::onScanAndOrganize,
           colors = ButtonDefaults.filledTonalButtonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream),
@@ -651,9 +767,9 @@ private fun BriefingCard(state: JarvisUiState, actions: JarvisActions) {
     Text(b.headline, style = JarvisType.TitleSerif, color = HudColors.Text)
     Spacer(Modifier.height(6.dp))
     Text(b.summary, style = MaterialTheme.typography.bodyMedium, color = HudColors.TextDim)
-    if (b.highlights.isNotEmpty()) {
+    if (combinedHighlights.isNotEmpty()) {
       Spacer(Modifier.height(12.dp))
-      val activeHighlight = b.highlights[highlightIdx.coerceIn(0, b.highlights.lastIndex)]
+      val activeHighlight = combinedHighlights[highlightIdx.coerceIn(0, combinedHighlights.lastIndex)]
       Row(
         Modifier
           .fillMaxWidth()
@@ -669,11 +785,7 @@ private fun BriefingCard(state: JarvisUiState, actions: JarvisActions) {
           Text(activeHighlight, style = MaterialTheme.typography.bodyMedium, color = HudColors.Text)
           if (canCycle) {
             Spacer(Modifier.height(2.dp))
-            Text(
-              "tap for another (${highlightIdx + 1}/${b.highlights.size})",
-              style = JarvisType.PromptItalic,
-              color = HudColors.TextMuted,
-            )
+            Text("tap for another (${highlightIdx + 1}/${combinedHighlights.size})", style = JarvisType.PromptItalic, color = HudColors.TextMuted)
           }
         }
       }
@@ -688,18 +800,9 @@ private fun BriefingCard(state: JarvisUiState, actions: JarvisActions) {
         .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-          if (state.isSpeaking) Icons.Outlined.Stop else Icons.AutoMirrored.Outlined.VolumeUp,
-          null,
-          tint = HudColors.Text,
-          modifier = Modifier.size(16.dp),
-        )
+        Icon(if (state.isSpeaking) Icons.Outlined.Stop else Icons.AutoMirrored.Outlined.VolumeUp, null, tint = HudColors.Text, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
-        Text(
-          if (state.isSpeaking) "Stop" else "Listen",
-          style = MaterialTheme.typography.labelLarge,
-          color = HudColors.Text,
-        )
+        Text(if (state.isSpeaking) "Stop" else "Listen", style = MaterialTheme.typography.labelLarge, color = HudColors.Text)
       }
     }
   }
@@ -740,69 +843,121 @@ private fun DeviceCard(state: JarvisUiState) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AddReminderSheet(
-  dateKey: String,
-  onAdd: (String, Int) -> Unit,
-  onDismiss: () -> Unit,
-) {
+private fun AddReminderSheet(dateKey: String, onAdd: (String, Int) -> Unit, onDismiss: () -> Unit) {
   var title by remember { mutableStateOf("") }
   var selectedMinutes by remember { mutableIntStateOf(10 * 60) }
-  val slots = listOf(
-    "9:00 AM" to 9 * 60,
-    "11:00 AM" to 11 * 60,
-    "2:00 PM" to 14 * 60,
-    "5:00 PM" to 17 * 60,
-    "8:00 PM" to 20 * 60,
-  )
-
-  ModalBottomSheet(
-    onDismissRequest = onDismiss,
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    containerColor = HudColors.Surface,
-  ) {
-    Column(
-      Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 20.dp)
-        .navigationBarsPadding()
-        .padding(bottom = 20.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+  val slots = listOf("9:00 AM" to 9 * 60, "11:00 AM" to 11 * 60, "2:00 PM" to 14 * 60, "5:00 PM" to 17 * 60, "8:00 PM" to 20 * 60)
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = HudColors.Surface) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text("Quick reminder", style = JarvisType.TitleSerif, color = HudColors.Text)
       Text("For $dateKey · Jarvis will nudge you gently.", style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim)
-      OutlinedTextField(
-        value = title,
-        onValueChange = { title = it },
-        label = { Text("What would you like to remember?") },
-        placeholder = { Text("Review Netflix renewal, evening walk…") },
-        singleLine = true,
-        shape = MaterialTheme.shapes.medium,
-        colors = jarvisTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
-      )
-      Text("Time", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+      OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("What would you like to remember?") }, singleLine = true, shape = MaterialTheme.shapes.medium, colors = jarvisTextFieldColors(), modifier = Modifier.fillMaxWidth())
       FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         slots.forEach { (label, mins) ->
-          FilterChip(
-            selected = selectedMinutes == mins,
-            onClick = { selectedMinutes = mins },
-            label = { Text(label) },
-            shape = CircleShape,
-            colors = FilterChipDefaults.filterChipColors(
-              selectedContainerColor = HudColors.SandSoft,
-              selectedLabelColor = HudColors.Text,
-            ),
-          )
+          FilterChip(selected = selectedMinutes == mins, onClick = { selectedMinutes = mins }, label = { Text(label) }, shape = CircleShape, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = HudColors.SandSoft, selectedLabelColor = HudColors.Text))
         }
       }
-      Button(
-        onClick = { onAdd(title, selectedMinutes) },
-        enabled = title.isNotBlank(),
-        shape = CircleShape,
-        modifier = Modifier.fillMaxWidth().height(50.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream),
-      ) {
+      Button(onClick = { onAdd(title, selectedMinutes) }, enabled = title.isNotBlank(), shape = CircleShape, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream)) {
         Text("Save reminder")
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun QuickTextLogSheet(
+  title: String,
+  subtitle: String,
+  label: String,
+  placeholder: String,
+  cta: String,
+  presets: List<String>,
+  onSubmit: (String) -> Unit,
+  onDismiss: () -> Unit,
+) {
+  var text by remember { mutableStateOf("") }
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = HudColors.Surface) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text(title, style = JarvisType.TitleSerif, color = HudColors.Text)
+      Text(subtitle, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim)
+      OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text(label) }, placeholder = { Text(placeholder) }, shape = MaterialTheme.shapes.medium, colors = jarvisTextFieldColors(), modifier = Modifier.fillMaxWidth())
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        presets.forEach { p ->
+          FilterChip(selected = text == p, onClick = { text = p }, label = { Text(p) }, shape = CircleShape, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = HudColors.BlushSoft, selectedLabelColor = HudColors.Text))
+        }
+      }
+      Button(onClick = { onSubmit(text) }, enabled = text.isNotBlank(), shape = CircleShape, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream)) {
+        Text(cta)
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun QuickWorkoutSheet(onSubmit: (String, Int) -> Unit, onDismiss: () -> Unit) {
+  var kind by remember { mutableStateOf("Brisk walk") }
+  var mins by remember { mutableIntStateOf(30) }
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = HudColors.Surface) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text("Log activity", style = JarvisType.TitleSerif, color = HudColors.Text)
+      OutlinedTextField(value = kind, onValueChange = { kind = it }, label = { Text("Activity") }, singleLine = true, shape = MaterialTheme.shapes.medium, colors = jarvisTextFieldColors(), modifier = Modifier.fillMaxWidth())
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("Brisk walk", "Cycling", "Strength", "Yoga", "Run").forEach { a ->
+          FilterChip(selected = kind == a, onClick = { kind = a }, label = { Text(a) }, shape = CircleShape, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = HudColors.SageSoft, selectedLabelColor = HudColors.Text))
+        }
+      }
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(15, 30, 45, 60).forEach { m ->
+          FilterChip(selected = mins == m, onClick = { mins = m }, label = { Text("${m}m") }, shape = CircleShape, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = HudColors.SandSoft, selectedLabelColor = HudColors.Text))
+        }
+      }
+      Button(onClick = { onSubmit(kind, mins) }, enabled = kind.isNotBlank(), shape = CircleShape, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream)) {
+        Text("Save activity")
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun QuickSleepSheet(onSubmit: (Float, String, String, Int) -> Unit, onDismiss: () -> Unit) {
+  var hours by remember { mutableFloatStateOf(7.5f) }
+  var quality by remember { mutableIntStateOf(84) }
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = HudColors.Surface) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text("Log last night's sleep", style = JarvisType.TitleSerif, color = HudColors.Text)
+      Text("Duration", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(5.5f, 6.5f, 7.0f, 7.5f, 8.0f, 8.5f).forEach { h ->
+          FilterChip(selected = hours == h, onClick = { hours = h }, label = { Text("${h}h") }, shape = CircleShape, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = HudColors.SlateBlueSoft, selectedLabelColor = HudColors.Text))
+        }
+      }
+      Text("How rested do you feel?", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("Tired" to 58, "Okay" to 74, "Rested" to 86, "Great" to 94).forEach { (label, score) ->
+          FilterChip(selected = quality == score, onClick = { quality = score }, label = { Text(label) }, shape = CircleShape, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = HudColors.LavenderSoft, selectedLabelColor = HudColors.Text))
+        }
+      }
+      Button(onClick = { onSubmit(hours, "11:30 PM", "7:00 AM", quality) }, shape = CircleShape, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream)) {
+        Text("Save sleep")
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickNumberSheet(title: String, subtitle: String, label: String, initial: String, onSubmit: (Int) -> Unit, onDismiss: () -> Unit) {
+  var text by remember { mutableStateOf(initial) }
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = HudColors.Surface) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text(title, style = JarvisType.TitleSerif, color = HudColors.Text)
+      Text(subtitle, style = MaterialTheme.typography.bodySmall, color = HudColors.TextDim)
+      OutlinedTextField(value = text, onValueChange = { v -> text = v.filter { it.isDigit() }.take(6) }, label = { Text(label) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = MaterialTheme.shapes.medium, colors = jarvisTextFieldColors(), modifier = Modifier.fillMaxWidth())
+      Button(onClick = { onSubmit(text.toIntOrNull() ?: 0) }, enabled = (text.toIntOrNull() ?: 0) > 0, shape = CircleShape, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream)) {
+        Text("Save")
       }
     }
   }

@@ -23,9 +23,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Persists [JarvisSettings] and UI selections in SharedPreferences.
- * Every preference key is read independently with type-safe fallbacks so an app version
- * upgrade or a single schema mismatch never wipes out other user selections.
+ * Persists [JarvisSettings], UI selections, and wellness targets in SharedPreferences.
+ * Every field is read independently so an app upgrade or type change never wipes other saved state.
  */
 class SharedPrefsSettingsRepository(
   context: Context,
@@ -54,12 +53,20 @@ class SharedPrefsSettingsRepository(
         .putBoolean(K_ONBOARDED, clean.onboardingDone)
         .putFloat(K_BUDGET, clean.monthlyBudget.toFloat())
         .putString(K_TAB, clean.selectedTabName)
+        .putInt(K_TODAY_VIEW, clean.todayViewIndex)
         .putInt(K_SUBS_VIEW, clean.subsViewIndex)
         .putBoolean(K_INBOX_COMPLETED, clean.inboxShowCompleted)
         .putBoolean(K_PROACTIVE, clean.proactiveNotificationsEnabled)
         .putInt(K_RENEWAL_LEAD, clean.renewalLeadDays)
         .putInt(K_MORNING_HOUR, clean.morningBriefingHour)
         .putInt(K_FOCUS_GOAL, clean.dailyFocusGoalMinutes)
+        .putInt(K_CALORIE_GOAL, clean.dailyCalorieGoal)
+        .putInt(K_PROTEIN_GOAL, clean.dailyProteinGoalG)
+        .putInt(K_CARBS_GOAL, clean.dailyCarbsGoalG)
+        .putInt(K_FAT_GOAL, clean.dailyFatGoalG)
+        .putInt(K_STEP_GOAL, clean.dailyStepGoal)
+        .putInt(K_SLEEP_GOAL, clean.sleepGoalMinutes)
+        .putBoolean(K_CYCLE_ENABLED, clean.cycleTrackingEnabled)
       if (clean.inboxCategoryName == null) editor.remove(K_INBOX_CAT) else editor.putString(K_INBOX_CAT, clean.inboxCategoryName)
 
       val key = clean.apiKey
@@ -94,6 +101,7 @@ class SharedPrefsSettingsRepository(
       onboardingDone = safeBool(K_ONBOARDED, prefs.contains(K_CALLSIGN)),
       monthlyBudget = safeFloat(K_BUDGET, d.monthlyBudget.toFloat()).toDouble().coerceAtLeast(0.0),
       selectedTabName = safeString(K_TAB)?.takeIf { n -> HudTab.entries.any { it.name == n } } ?: d.selectedTabName,
+      todayViewIndex = safeInt(K_TODAY_VIEW, d.todayViewIndex).coerceIn(0, 3),
       subsViewIndex = safeInt(K_SUBS_VIEW, d.subsViewIndex).coerceIn(0, 2),
       inboxCategoryName = safeString(K_INBOX_CAT),
       inboxShowCompleted = safeBool(K_INBOX_COMPLETED, d.inboxShowCompleted),
@@ -101,6 +109,13 @@ class SharedPrefsSettingsRepository(
       renewalLeadDays = safeInt(K_RENEWAL_LEAD, d.renewalLeadDays).coerceIn(1, 14),
       morningBriefingHour = safeInt(K_MORNING_HOUR, d.morningBriefingHour).coerceIn(5, 12),
       dailyFocusGoalMinutes = safeInt(K_FOCUS_GOAL, d.dailyFocusGoalMinutes).coerceIn(30, 600),
+      dailyCalorieGoal = safeInt(K_CALORIE_GOAL, d.dailyCalorieGoal).coerceIn(800, 5000),
+      dailyProteinGoalG = safeInt(K_PROTEIN_GOAL, d.dailyProteinGoalG).coerceIn(30, 300),
+      dailyCarbsGoalG = safeInt(K_CARBS_GOAL, d.dailyCarbsGoalG).coerceIn(40, 500),
+      dailyFatGoalG = safeInt(K_FAT_GOAL, d.dailyFatGoalG).coerceIn(20, 200),
+      dailyStepGoal = safeInt(K_STEP_GOAL, d.dailyStepGoal).coerceIn(1000, 30000),
+      sleepGoalMinutes = safeInt(K_SLEEP_GOAL, d.sleepGoalMinutes).coerceIn(240, 720),
+      cycleTrackingEnabled = safeBool(K_CYCLE_ENABLED, d.cycleTrackingEnabled),
     )
   }
 
@@ -134,6 +149,7 @@ class SharedPrefsSettingsRepository(
     private const val K_ONBOARDED = "onboarding_done"
     private const val K_BUDGET = "monthly_budget"
     private const val K_TAB = "selected_tab"
+    private const val K_TODAY_VIEW = "today_view_index"
     private const val K_SUBS_VIEW = "subs_view_index"
     private const val K_INBOX_CAT = "inbox_category"
     private const val K_INBOX_COMPLETED = "inbox_show_completed"
@@ -141,6 +157,13 @@ class SharedPrefsSettingsRepository(
     private const val K_RENEWAL_LEAD = "renewal_lead_days"
     private const val K_MORNING_HOUR = "morning_briefing_hour"
     private const val K_FOCUS_GOAL = "daily_focus_goal_min"
+    private const val K_CALORIE_GOAL = "daily_calorie_goal"
+    private const val K_PROTEIN_GOAL = "daily_protein_goal"
+    private const val K_CARBS_GOAL = "daily_carbs_goal"
+    private const val K_FAT_GOAL = "daily_fat_goal"
+    private const val K_STEP_GOAL = "daily_step_goal"
+    private const val K_SLEEP_GOAL = "sleep_goal_min"
+    private const val K_CYCLE_ENABLED = "cycle_tracking_enabled"
   }
 }
 

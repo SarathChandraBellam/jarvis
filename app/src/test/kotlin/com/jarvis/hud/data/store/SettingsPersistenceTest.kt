@@ -50,6 +50,7 @@ class SettingsPersistenceTest {
       onboardingDone = true,
       monthlyBudget = 42_000.0,
       selectedTabName = "FINANCE",
+      todayViewIndex = 2,
       subsViewIndex = 1,
       inboxCategoryName = "BILL",
       inboxShowCompleted = true,
@@ -57,6 +58,10 @@ class SettingsPersistenceTest {
       renewalLeadDays = 7,
       morningBriefingHour = 9,
       dailyFocusGoalMinutes = 180,
+      dailyCalorieGoal = 2100,
+      dailyStepGoal = 10000,
+      sleepGoalMinutes = 450,
+      cycleTrackingEnabled = false,
     )
     SharedPrefsSettingsRepository(ctx, cipher).update(edited)
     val reloaded = SharedPrefsSettingsRepository(ctx, cipher).settings.value

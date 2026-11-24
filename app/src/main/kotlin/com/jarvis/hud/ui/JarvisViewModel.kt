@@ -9,6 +9,7 @@ import com.jarvis.hud.contracts.JarvisContainer
 import com.jarvis.hud.contracts.isEnabled
 import com.jarvis.hud.insights.ProactivePlanner
 import com.jarvis.hud.insights.SubscriptionInsights
+import com.jarvis.hud.insights.WellnessEngine
 import com.jarvis.hud.model.AppUsageStat
 import com.jarvis.hud.model.BillingCadence
 import com.jarvis.hud.model.CalendarEntry
@@ -16,16 +17,21 @@ import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
 import com.jarvis.hud.model.ConnectionTestResult
 import com.jarvis.hud.model.DataSource
+import com.jarvis.hud.model.HabitItem
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.JarvisUiState
+import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PlannerReminder
 import com.jarvis.hud.model.RawEvent
+import com.jarvis.hud.model.SleepLog
 import com.jarvis.hud.model.SubscriptionCategory
+import com.jarvis.hud.model.TimerMode
 import com.jarvis.hud.model.TrackedSubscription
+import com.jarvis.hud.model.WorkoutLog
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.coroutines.cancellation.CancellationException
@@ -39,7 +45,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Orchestrates Jarvis purely through [JarvisContainer] interfaces.
- * Persists user selections, reminders, tracked subscriptions, and proactive alert states.
+ * Persists UI selections, reminders, subscriptions, proactive alert state, and personal wellness logs.
  */
 class JarvisViewModel(
   private val c: JarvisContainer,
@@ -54,6 +60,13 @@ class JarvisViewModel(
       selectedTab = initialTab,
       settings = initialSettings,
       reminders = c.plannerStore.reminders.value,
+      meals = c.plannerStore.meals.value,
+      sleepLogs = c.plannerStore.sleepLogs.value,
+      workouts = c.plannerStore.workouts.value,
+      habits = c.plannerStore.habits.value,
+      stepsByDate = c.plannerStore.stepsByDate.value,
+      timerSession = c.plannerStore.timerSession.value,
+      cycleState = c.plannerStore.cycleState.value,
     ),
   )
   val uiState: StateFlow<JarvisUiState> = _uiState.asStateFlow()
@@ -83,6 +96,18 @@ class JarvisViewModel(
     viewModelScope.launch {
       c.plannerStore.reminders.collect { rems ->
         _uiState.update { it.copy(reminders = rems) }
+        recomputeDerived()
+      }
+    }
+    viewModelScope.launch { c.plannerStore.meals.collect { m -> _uiState.update { it.copy(meals = m) } } }
+    viewModelScope.launch { c.plannerStore.sleepLogs.collect { s -> _uiState.update { it.copy(sleepLogs = s) } } }
+    viewModelScope.launch { c.plannerStore.workouts.collect { w -> _uiState.update { it.copy(workouts = w) } } }
+    viewModelScope.launch { c.plannerStore.habits.collect { h -> _uiState.update { it.copy(habits = h) } } }
+    viewModelScope.launch { c.plannerStore.stepsByDate.collect { st -> _uiState.update { it.copy(stepsByDate = st) } } }
+    viewModelScope.launch { c.plannerStore.timerSession.collect { t -> _uiState.update { it.copy(timerSession = t) } } }
+    viewModelScope.launch {
+      c.plannerStore.cycleState.collect { cy ->
+        _uiState.update { it.copy(cycleState = cy) }
         recomputeDerived()
       }
     }
@@ -127,6 +152,7 @@ class JarvisViewModel(
       briefing = st.briefing,
       settings = st.settings,
       dismissedKeys = c.plannerStore.dismissedAlertKeys.value,
+      cycleState = c.plannerStore.cycleState.value,
       now = now,
     )
     _uiState.update {
@@ -137,8 +163,6 @@ class JarvisViewModel(
       )
     }
   }
-
-  // ---------------------------------------------------------------- refresh helpers
 
   private var permissionsLoaded = false
 
@@ -167,6 +191,12 @@ class JarvisViewModel(
     if (cur.selectedTabName != tab.name) onUpdateSettings(cur.copy(selectedTabName = tab.name))
   }
 
+  override fun onSelectTodayView(index: Int) {
+    val clamped = index.coerceIn(0, 4)
+    val cur = settings
+    if (cur.todayViewIndex != clamped) onUpdateSettings(cur.copy(todayViewIndex = clamped))
+  }
+
   override fun onSelectSubsView(index: Int) {
     val clamped = index.coerceIn(0, 2)
     val cur = settings
@@ -181,13 +211,9 @@ class JarvisViewModel(
   }
 
   override fun onOpenSettings() = _uiState.update { it.copy(showSettings = true) }
-
   override fun onCloseSettings() = _uiState.update { it.copy(showSettings = false) }
-
   override fun onDismissError() = _uiState.update { it.copy(lastError = null) }
-
   override fun onOpenItem(itemId: String?) = _uiState.update { it.copy(openItemId = itemId) }
-
   override fun onClearChat() = _uiState.update { it.copy(chatMessages = emptyList()) }
 
   // ---------------------------------------------------------------- planner, subscriptions & proactive alerts
@@ -257,6 +283,112 @@ class JarvisViewModel(
     }
   }
 
+  // ---------------------------------------------------------------- wellness (meals, sleep, workouts, habits, timer, steps)
+
+  override fun onLogMeal(description: String, dateKey: String) {
+    val clean = description.trim()
+    if (clean.isEmpty()) return
+    viewModelScope.launch {
+      safely {
+        val s = settings
+        val est = WellnessEngine.estimateMeal(clean, s.apiKey, s.modelId, c.openRouter)
+        c.plannerStore.addMeal(
+          MealLog(
+            id = nextId("meal"),
+            title = est.title,
+            calories = est.calories,
+            proteinG = est.proteinG,
+            carbsG = est.carbsG,
+            fatG = est.fatG,
+            dateKey = dateKey,
+            timestamp = clock(),
+            note = est.note,
+          ),
+        )
+      }
+    }
+  }
+
+  override fun onDeleteMeal(mealId: String) {
+    viewModelScope.launch { safely { c.plannerStore.deleteMeal(mealId) } }
+  }
+
+  override fun onLogSleep(hours: Float, bedtimeLabel: String, wakeLabel: String, qualityScore: Int, dateKey: String) {
+    val totalMin = (hours.coerceIn(1f, 16f) * 60f).toInt()
+    viewModelScope.launch {
+      safely {
+        c.plannerStore.saveSleep(
+          SleepLog(
+            id = "sleep-$dateKey",
+            dateKey = dateKey,
+            totalMinutes = totalMin,
+            bedtimeLabel = bedtimeLabel.ifBlank { "11:00 PM" },
+            wakeLabel = wakeLabel.ifBlank { "7:00 AM" },
+            qualityScore = qualityScore.coerceIn(10, 100),
+          ),
+        )
+      }
+    }
+  }
+
+  override fun onLogWorkout(description: String, durationMinutes: Int, dateKey: String) {
+    val clean = description.trim().ifEmpty { "Movement" }
+    val mins = durationMinutes.coerceIn(5, 360)
+    val kcal = WellnessEngine.estimateWorkoutCalories(clean, mins)
+    viewModelScope.launch {
+      safely {
+        c.plannerStore.addWorkout(
+          WorkoutLog(
+            id = nextId("wk"),
+            title = clean,
+            durationMinutes = mins,
+            caloriesBurned = kcal,
+            dateKey = dateKey,
+            timestamp = clock(),
+          ),
+        )
+      }
+    }
+  }
+
+  override fun onDeleteWorkout(workoutId: String) {
+    viewModelScope.launch { safely { c.plannerStore.deleteWorkout(workoutId) } }
+  }
+
+  override fun onToggleHabitToday(habitId: String, dateKey: String) {
+    viewModelScope.launch { safely { c.plannerStore.toggleHabit(habitId, dateKey) } }
+  }
+
+  override fun onAddHabit(title: String) {
+    val clean = title.trim()
+    if (clean.isEmpty()) return
+    viewModelScope.launch { safely { c.plannerStore.addHabit(HabitItem(nextId("hab"), clean)) } }
+  }
+
+  override fun onDeleteHabit(habitId: String) {
+    viewModelScope.launch { safely { c.plannerStore.deleteHabit(habitId) } }
+  }
+
+  override fun onStartTimer(mode: TimerMode, targetMinutes: Int) {
+    viewModelScope.launch { safely { c.plannerStore.startTimer(mode, targetMinutes, clock(), todayKey()) } }
+  }
+
+  override fun onStopTimer() {
+    viewModelScope.launch { safely { c.plannerStore.stopTimer(clock(), todayKey()) } }
+  }
+
+  override fun onLogManualSteps(steps: Int, dateKey: String) {
+    viewModelScope.launch { safely { c.plannerStore.recordSteps(dateKey, steps) } }
+  }
+
+  override fun onTogglePeriodDay(dateKey: String) {
+    viewModelScope.launch { safely { c.plannerStore.togglePeriodDay(dateKey) } }
+  }
+
+  override fun onUpdateCycleLength(days: Int) {
+    viewModelScope.launch { safely { c.plannerStore.setCycleLength(days) } }
+  }
+
   // ---------------------------------------------------------------- scan pipeline
 
   override fun onScanAndOrganize() {
@@ -313,6 +445,14 @@ class JarvisViewModel(
         if (s.isEnabled(DataSource.CALL)) c.phoneData.readRecentCalls() else emptyList()
       val usage: List<AppUsageStat> =
         if (s.isEnabled(DataSource.USAGE)) c.phoneData.readAppUsage(sinceMillis = midnight) else emptyList()
+
+      // Read hardware step counter (works without restricted Usage Stats).
+      val sensorSteps = runCatching { c.stepSensor.readTodaySteps() }.getOrNull()
+      if (sensorSteps != null) {
+        val current = c.plannerStore.stepsByDate.value[todayKey()] ?: 0
+        if (sensorSteps > current) c.plannerStore.recordSteps(todayKey(), sensorSteps)
+      }
+
       refreshTelemetry()
       _uiState.update { it.copy(calendarEntries = calendar, recentCalls = calls, appUsageStats = usage) }
 
@@ -366,14 +506,10 @@ class JarvisViewModel(
     if (settings.voiceEnabled && text.isNotBlank()) c.speaker.speak(text)
   }
 
-  // ---------------------------------------------------------------- items
-
   override fun onMarkItemStatus(itemId: String, status: ItemStatus) {
     if (status != ItemStatus.ACTIVE) _uiState.update { if (it.openItemId == itemId) it.copy(openItemId = null) else it }
     viewModelScope.launch { safely { c.store.setStatus(itemId, status) } }
   }
-
-  // ---------------------------------------------------------------- chat
 
   override fun onSendChatMessage(prompt: String) {
     val text = prompt.trim()
@@ -475,8 +611,6 @@ class JarvisViewModel(
     }
   }
 
-  // ---------------------------------------------------------------- permissions (Activity-owned)
-
   override fun onRequestRuntimePermissions() = Unit
   override fun onOpenNotificationAccessSettings() = Unit
   override fun onOpenUsageAccessSettings() = Unit
@@ -486,12 +620,8 @@ class JarvisViewModel(
     super.onCleared()
   }
 
-  // ---------------------------------------------------------------- internals
-
   private fun status(line: String) = _uiState.update { it.copy(syncStatusLine = line) }
-
-  private fun setError(e: Throwable) =
-    _uiState.update { it.copy(lastError = e.message ?: e.toString()) }
+  private fun setError(e: Throwable) = _uiState.update { it.copy(lastError = e.message ?: e.toString()) }
 
   private suspend fun safely(block: suspend () -> Unit): Boolean = try {
     block()

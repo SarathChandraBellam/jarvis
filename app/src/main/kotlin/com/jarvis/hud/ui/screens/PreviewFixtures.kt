@@ -5,14 +5,17 @@ import com.jarvis.hud.model.BillingCadence
 import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
+import com.jarvis.hud.model.CycleState
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
+import com.jarvis.hud.model.HabitItem
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.IntelCategory
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.JarvisUiState
+import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
@@ -20,10 +23,13 @@ import com.jarvis.hud.model.PlannerReminder
 import com.jarvis.hud.model.Priority
 import com.jarvis.hud.model.ProactiveAlert
 import com.jarvis.hud.model.ProactiveKind
+import com.jarvis.hud.model.SleepLog
 import com.jarvis.hud.model.SubscriptionCategory
+import com.jarvis.hud.model.TimerMode
+import com.jarvis.hud.model.TimerSession
 import com.jarvis.hud.model.TrackedSubscription
+import com.jarvis.hud.model.WorkoutLog
 
-/** Fake data + no-op actions for @Preview and ScreenshotTest. Not used at runtime. */
 object PreviewFixtures {
   val noOpActions: JarvisActions = object : JarvisActions {
     override fun onSelectTab(tab: HudTab) {}
@@ -50,6 +56,7 @@ object PreviewFixtures {
     val h = 3_600_000L
     val zone = java.time.ZoneId.systemDefault()
     val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val todayKey = today.toString()
     fun dueIn(days: Long) = today.plusDays(days).toString()
 
     val items = listOf(
@@ -75,9 +82,45 @@ object PreviewFixtures {
       TrackedSubscription("sub5", "Spotify", 119.0, cadence = BillingCadence.MONTHLY, category = SubscriptionCategory.STREAMING, nextRenewalDate = dueIn(14), sourceNote = "UPI mandate"),
     )
 
+    val meals = listOf(
+      MealLog("ml1", "Poha, idli & 2 eggs", 475, 22, 62, 14, todayKey, now - 4 * h),
+      MealLog("ml2", "Chicken biryani bowl", 520, 34, 58, 16, todayKey, now - 1 * h),
+    )
+
+    val sleepLogs = listOf(
+      SleepLog("sl0", todayKey, 7 * 60 + 15, "11:45 PM", "7:00 AM", qualityScore = 84, deepMinutes = 76, remMinutes = 115, lightMinutes = 228, awakeMinutes = 16),
+      SleepLog("sl1", today.minusDays(1).toString(), 6 * 60 + 37, "1:13 AM", "8:01 AM", qualityScore = 76),
+      SleepLog("sl2", today.minusDays(2).toString(), 7 * 60 + 45, "11:15 PM", "7:00 AM", qualityScore = 88),
+    )
+
+    val workouts = listOf(
+      WorkoutLog("wk1", "Evening cycling", 40, 320, todayKey, now - 2 * h),
+    )
+
+    val habits = listOf(
+      HabitItem("h1", "2L Water", setOf(todayKey, today.minusDays(1).toString())),
+      HabitItem("h2", "Magnesium 400mg", setOf(todayKey)),
+      HabitItem("h3", "Phone away 10:30 PM", setOf(today.minusDays(1).toString())),
+    )
+
+    val stepsMap = mapOf(
+      today.minusDays(5).toString() to 6420,
+      today.minusDays(4).toString() to 8190,
+      today.minusDays(3).toString() to 5310,
+      today.minusDays(2).toString() to 9840,
+      today.minusDays(1).toString() to 7210,
+      todayKey to 8640,
+    )
+
+    val cycle = CycleState(
+      periodStartDates = listOf(today.minusDays(45).toString(), today.minusDays(15).toString()),
+      cycleLengthDays = 30,
+      periodDurationDays = 5,
+    )
+
     val reminders = listOf(
-      PlannerReminder("r1", "Review Netflix & trial renewals", 10 * 60 + 30, today.toString(), isDone = false),
-      PlannerReminder("r2", "Evening walk & tea away from screens", 18 * 60, today.toString(), isDone = true),
+      PlannerReminder("r1", "Review Netflix & trial renewals", 10 * 60 + 30, todayKey, isDone = false),
+      PlannerReminder("r2", "Evening walk & tea away from screens", 18 * 60, todayKey, isDone = true),
     )
 
     val alerts = listOf(
@@ -89,12 +132,12 @@ object PreviewFixtures {
       selectedTab = tab,
       syncStatusLine = "Up to date · 6 new items",
       settings = JarvisSettings(userCallsign = "Tony", apiKey = "sk-or-v1-preview", onboardingDone = true),
-      permissions = PermissionStatus(true, false, true, true, false, true),
+      permissions = PermissionStatus(true, false, true, true, true, true, true),
       briefing = DailyBriefing(
-        dateKey = today.toString(),
+        dateKey = todayKey,
         headline = "Calm rhythm ahead, Tony.",
-        summary = "Your HDFC card bill and Netflix renewal arrive in two days. Two meetings on your planner today.",
-        highlights = listOf("Netflix renews in 2 days · ₹649", "Airdopes arriving by 7 PM", "Flight to Delhi on the 24th"),
+        summary = "You slept 7h 15m and logged 8,640 steps. Netflix and HDFC bill arrive in two days.",
+        highlights = listOf("Netflix renews in 2 days · ₹649", "Mid-cycle Day 16 · steady energy", "Airdopes arriving by 7 PM"),
         modelUsed = "google/gemini-2.5-flash",
         createdAt = now - 15 * 60_000L,
       ),
@@ -102,6 +145,13 @@ object PreviewFixtures {
       subscriptions = subs,
       reminders = reminders,
       proactiveAlerts = alerts,
+      meals = meals,
+      sleepLogs = sleepLogs,
+      workouts = workouts,
+      habits = habits,
+      stepsByDate = stepsMap,
+      timerSession = TimerSession(isRunning = true, mode = TimerMode.FASTING, startedAtMillis = now - 11 * h, targetMinutes = 16 * 60, completedFocusMinutesToday = 45, lastFastedMinutes = 945, lastDateKey = todayKey),
+      cycleState = cycle,
       calendarEntries = listOf(
         CalendarEntry("c1", "Stand-up with R&D", now - h, now - h / 2, "Workshop"),
         CalendarEntry("c2", "Design review", now + h, now + 2 * h, "Studio"),
@@ -111,7 +161,7 @@ object PreviewFixtures {
         CallSummary("k2", "+91 98xxxxxx21", "MISSED", 0, now - 4 * h),
       ),
       appUsageStats = listOf(
-        AppUsageStat("a", "YouTube", 64), AppUsageStat("b", "WhatsApp", 42), AppUsageStat("c", "Chrome", 28),
+        AppUsageStat("a", "YouTube", 64), AppUsageStat("b", "WhatsApp", 42),
       ),
       chatMessages = listOf(
         ChatMessage("u1", true, "What subscriptions renew soon?", now - 4 * 60_000L),

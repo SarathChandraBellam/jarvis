@@ -181,6 +181,12 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
         SectionHeader("Assistant")
         JCard(padding = 8.dp) {
           SwitchRow(
+            "Cycle & period tracker",
+            "Show cycle phase context, period calendar & phase-aware insights",
+            Icons.Outlined.NotificationsActive,
+            draft.cycleTrackingEnabled,
+          ) { draft = draft.copy(cycleTrackingEnabled = it) }
+          SwitchRow(
             "Voice replies",
             "Read briefings and answers out loud",
             Icons.Outlined.RecordVoiceOver,

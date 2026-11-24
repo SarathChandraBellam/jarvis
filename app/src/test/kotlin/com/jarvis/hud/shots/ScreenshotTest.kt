@@ -35,6 +35,10 @@ class ScreenshotTest {
   }
 
   @Test fun home() = shot("home", PreviewFixtures.state(HudTab.HUD))
+  @Test fun homeFood() = shot("home-food", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 1)) })
+  @Test fun homeCycle() = shot("home-cycle", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 2)) })
+  @Test fun homeSleep() = shot("home-sleep", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 3)) })
+  @Test fun homePlan() = shot("home-plan", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 4)) })
   @Test fun subsOverview() = shot("subs-overview", PreviewFixtures.state(HudTab.FINANCE))
   @Test fun subsRenewals() = shot("subs-renewals", PreviewFixtures.state(HudTab.FINANCE).let { it.copy(settings = it.settings.copy(subsViewIndex = 1)) })
   @Test fun subsBills() = shot("subs-bills", PreviewFixtures.state(HudTab.FINANCE).let { it.copy(settings = it.settings.copy(subsViewIndex = 2)) })
