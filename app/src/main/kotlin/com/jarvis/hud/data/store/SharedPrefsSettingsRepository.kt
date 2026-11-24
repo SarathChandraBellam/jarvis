@@ -6,7 +6,9 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.jarvis.hud.contracts.SettingsRepository
 import com.jarvis.hud.model.DataSource
+import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.UserGender
 import java.security.KeyStore
 import java.util.Base64
 import javax.crypto.Cipher
@@ -22,9 +24,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Persists [JarvisSettings] in SharedPreferences. The OpenRouter API key is encrypted with
- * AES/GCM/NoPadding using a non-exportable Android Keystore key (alias [KEY_ALIAS]); the
- * ciphertext and IV are stored base64-encoded. Settings load synchronously at construction.
+ * Persists [JarvisSettings], UI selections, and wellness targets in SharedPreferences.
+ * Every field is read independently so an app upgrade or type change never wipes other saved state.
  */
 class SharedPrefsSettingsRepository(
   context: Context,
@@ -37,7 +38,6 @@ class SharedPrefsSettingsRepository(
   private val state = MutableStateFlow(load())
   override val settings: StateFlow<JarvisSettings> = state.asStateFlow()
 
-  /** Serializes writes so a slow older save can never land after (and overwrite) a newer one. */
   private val writeLock = Mutex()
 
   override suspend fun update(settings: JarvisSettings) = writeLock.withLock {
@@ -53,11 +53,28 @@ class SharedPrefsSettingsRepository(
         .putStringSet(K_AI_SHARE, clean.aiShareSources.map { it.name }.toSet())
         .putBoolean(K_ONBOARDED, clean.onboardingDone)
         .putFloat(K_BUDGET, clean.monthlyBudget.toFloat())
+        .putString(K_TAB, clean.selectedTabName)
+        .putInt(K_TODAY_VIEW, clean.todayViewIndex)
+        .putInt(K_SUBS_VIEW, clean.subsViewIndex)
+        .putBoolean(K_INBOX_COMPLETED, clean.inboxShowCompleted)
+        .putBoolean(K_PROACTIVE, clean.proactiveNotificationsEnabled)
+        .putInt(K_RENEWAL_LEAD, clean.renewalLeadDays)
+        .putInt(K_MORNING_HOUR, clean.morningBriefingHour)
+        .putInt(K_FOCUS_GOAL, clean.dailyFocusGoalMinutes)
+        .putInt(K_CALORIE_GOAL, clean.dailyCalorieGoal)
+        .putInt(K_PROTEIN_GOAL, clean.dailyProteinGoalG)
+        .putInt(K_CARBS_GOAL, clean.dailyCarbsGoalG)
+        .putInt(K_FAT_GOAL, clean.dailyFatGoalG)
+        .putInt(K_STEP_GOAL, clean.dailyStepGoal)
+        .putInt(K_SLEEP_GOAL, clean.sleepGoalMinutes)
+        .putString(K_GENDER, clean.userGender.name)
+        .putBoolean(K_CYCLE_ENABLED, clean.cycleTrackingEnabled)
+      if (clean.inboxCategoryName == null) editor.remove(K_INBOX_CAT) else editor.putString(K_INBOX_CAT, clean.inboxCategoryName)
+
       val key = clean.apiKey
       if (key.isEmpty()) {
         editor.remove(K_KEY_CT).remove(K_KEY_IV)
       } else if (key != state.value.apiKey || !prefs.contains(K_KEY_CT)) {
-        // Fail loudly instead of silently dropping the key (it would vanish on next launch).
         val (ct, iv) = try {
           cipher.encrypt(key)
         } catch (e: Exception) {
@@ -74,31 +91,49 @@ class SharedPrefsSettingsRepository(
   }
 
   private fun load(): JarvisSettings {
-    val defaults = JarvisSettings()
-    return try {
-      JarvisSettings(
-        apiKey = loadApiKey(),
-        modelId = prefs.getString(K_MODEL, null)?.takeIf { it.isNotBlank() } ?: defaults.modelId,
-        userCallsign = prefs.getString(K_CALLSIGN, null)?.takeIf { it.isNotBlank() } ?: defaults.userCallsign,
-        voiceEnabled = prefs.getBoolean(K_VOICE, defaults.voiceEnabled),
-        redactSensitiveData = prefs.getBoolean(K_REDACT, defaults.redactSensitiveData),
-        enabledSources = prefs.getStringSet(K_ENABLED, null)?.let(::toSources) ?: defaults.enabledSources,
-        aiShareSources = prefs.getStringSet(K_AI_SHARE, null)?.let(::toSources) ?: defaults.aiShareSources,
-        // Users upgrading from 1.0 already set the app up; don't show them the welcome screen.
-        onboardingDone = prefs.getBoolean(K_ONBOARDED, prefs.contains(K_CALLSIGN)),
-        monthlyBudget = prefs.getFloat(K_BUDGET, 0f).toDouble().coerceAtLeast(0.0),
-      )
-    } catch (_: Exception) {
-      defaults
-    }
+    val d = JarvisSettings()
+    return JarvisSettings(
+      apiKey = loadApiKey(),
+      modelId = safeString(K_MODEL)?.takeIf { it.isNotBlank() } ?: d.modelId,
+      userCallsign = safeString(K_CALLSIGN)?.takeIf { it.isNotBlank() } ?: d.userCallsign,
+      voiceEnabled = safeBool(K_VOICE, d.voiceEnabled),
+      redactSensitiveData = safeBool(K_REDACT, d.redactSensitiveData),
+      enabledSources = safeStringSet(K_ENABLED)?.let(::toSources) ?: d.enabledSources,
+      aiShareSources = safeStringSet(K_AI_SHARE)?.let(::toSources) ?: d.aiShareSources,
+      onboardingDone = safeBool(K_ONBOARDED, prefs.contains(K_CALLSIGN)),
+      monthlyBudget = safeFloat(K_BUDGET, d.monthlyBudget.toFloat()).toDouble().coerceAtLeast(0.0),
+      selectedTabName = safeString(K_TAB)?.takeIf { n -> HudTab.entries.any { it.name == n } } ?: d.selectedTabName,
+      todayViewIndex = safeInt(K_TODAY_VIEW, d.todayViewIndex).coerceIn(0, 4),
+      subsViewIndex = safeInt(K_SUBS_VIEW, d.subsViewIndex).coerceIn(0, 2),
+      inboxCategoryName = safeString(K_INBOX_CAT),
+      inboxShowCompleted = safeBool(K_INBOX_COMPLETED, d.inboxShowCompleted),
+      proactiveNotificationsEnabled = safeBool(K_PROACTIVE, d.proactiveNotificationsEnabled),
+      renewalLeadDays = safeInt(K_RENEWAL_LEAD, d.renewalLeadDays).coerceIn(1, 14),
+      morningBriefingHour = safeInt(K_MORNING_HOUR, d.morningBriefingHour).coerceIn(5, 12),
+      dailyFocusGoalMinutes = safeInt(K_FOCUS_GOAL, d.dailyFocusGoalMinutes).coerceIn(30, 600),
+      dailyCalorieGoal = safeInt(K_CALORIE_GOAL, d.dailyCalorieGoal).coerceIn(800, 5000),
+      dailyProteinGoalG = safeInt(K_PROTEIN_GOAL, d.dailyProteinGoalG).coerceIn(30, 300),
+      dailyCarbsGoalG = safeInt(K_CARBS_GOAL, d.dailyCarbsGoalG).coerceIn(40, 500),
+      dailyFatGoalG = safeInt(K_FAT_GOAL, d.dailyFatGoalG).coerceIn(20, 200),
+      dailyStepGoal = safeInt(K_STEP_GOAL, d.dailyStepGoal).coerceIn(1000, 30000),
+      sleepGoalMinutes = safeInt(K_SLEEP_GOAL, d.sleepGoalMinutes).coerceIn(240, 720),
+      userGender = safeString(K_GENDER)?.let { name -> UserGender.entries.firstOrNull { it.name == name } } ?: d.userGender,
+      cycleTrackingEnabled = safeBool(K_CYCLE_ENABLED, d.cycleTrackingEnabled),
+    )
   }
+
+  private fun safeString(key: String): String? = runCatching { prefs.getString(key, null) }.getOrNull()
+  private fun safeBool(key: String, def: Boolean): Boolean = runCatching { prefs.getBoolean(key, def) }.getOrDefault(def)
+  private fun safeInt(key: String, def: Int): Int = runCatching { prefs.getInt(key, def) }.getOrDefault(def)
+  private fun safeFloat(key: String, def: Float): Float = runCatching { prefs.getFloat(key, def) }.getOrDefault(def)
+  private fun safeStringSet(key: String): Set<String>? = runCatching { prefs.getStringSet(key, null) }.getOrNull()
 
   private fun toSources(names: Set<String>): Set<DataSource> =
     names.mapNotNull { n -> DataSource.entries.firstOrNull { it.name == n } }.toSet()
 
   private fun loadApiKey(): String {
-    val ct = prefs.getString(K_KEY_CT, null) ?: return ""
-    val iv = prefs.getString(K_KEY_IV, null) ?: return ""
+    val ct = safeString(K_KEY_CT) ?: return ""
+    val iv = safeString(K_KEY_IV) ?: return ""
     return runCatching { cipher.decrypt(ct, iv) }.getOrDefault("")
   }
 
@@ -116,19 +151,32 @@ class SharedPrefsSettingsRepository(
     private const val K_AI_SHARE = "ai_share_sources"
     private const val K_ONBOARDED = "onboarding_done"
     private const val K_BUDGET = "monthly_budget"
+    private const val K_TAB = "selected_tab"
+    private const val K_TODAY_VIEW = "today_view_index"
+    private const val K_SUBS_VIEW = "subs_view_index"
+    private const val K_INBOX_CAT = "inbox_category"
+    private const val K_INBOX_COMPLETED = "inbox_show_completed"
+    private const val K_PROACTIVE = "proactive_enabled"
+    private const val K_RENEWAL_LEAD = "renewal_lead_days"
+    private const val K_MORNING_HOUR = "morning_briefing_hour"
+    private const val K_FOCUS_GOAL = "daily_focus_goal_min"
+    private const val K_CALORIE_GOAL = "daily_calorie_goal"
+    private const val K_PROTEIN_GOAL = "daily_protein_goal"
+    private const val K_CARBS_GOAL = "daily_carbs_goal"
+    private const val K_FAT_GOAL = "daily_fat_goal"
+    private const val K_STEP_GOAL = "daily_step_goal"
+    private const val K_SLEEP_GOAL = "sleep_goal_min"
+    private const val K_GENDER = "user_gender"
+    private const val K_CYCLE_ENABLED = "cycle_tracking_enabled"
   }
 }
 
-/** Encrypts small secrets (the API key). Abstracted so tests can run without the Android Keystore. */
 interface SecretCipher {
-  /** @return (ciphertext base64, iv base64) */
   fun encrypt(plain: String): Pair<String, String>
   fun decrypt(ctB64: String, ivB64: String): String
-  /** Drops the underlying key (e.g. after it was invalidated). */
   fun reset()
 }
 
-/** AES/GCM with a non-exportable Android Keystore key. */
 class KeystoreCipher : SecretCipher {
   private fun secretKey(): SecretKey {
     val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }

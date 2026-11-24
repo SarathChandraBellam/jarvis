@@ -3,6 +3,7 @@ package com.jarvis.hud.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,10 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -34,19 +38,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisUiState
+import com.jarvis.hud.model.UserGender
 import com.jarvis.hud.ui.components.ArcReactor
-import com.jarvis.hud.ui.components.JCard
 import com.jarvis.hud.ui.components.PermissionList
 import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.theme.JarvisType
+import com.jarvis.hud.ui.viz.BentoCard
 
-/** First-run welcome: name + data access, then into the app. */
 @Composable
 fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
   var name by rememberSaveable { mutableStateOf(state.settings.userCallsign.takeIf { it != "Sir" } ?: "") }
+  var selectedGenderName by rememberSaveable { mutableStateOf(state.settings.userGender.name) }
+  val selectedGender = UserGender.entries.firstOrNull { it.name == selectedGenderName } ?: UserGender.FEMALE
   fun finish() {
     actions.onUpdateSettings(
-      state.settings.copy(userCallsign = name.trim().ifBlank { "Sir" }, onboardingDone = true),
+      state.settings.copy(
+        userCallsign = name.trim().ifBlank { "Sir" },
+        userGender = selectedGender,
+        cycleTrackingEnabled = selectedGender == UserGender.FEMALE,
+        onboardingDone = true,
+      ),
     )
   }
 
@@ -59,18 +71,18 @@ fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
         .padding(horizontal = 20.dp, vertical = 24.dp)
         .testTag("onboarding"),
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-      ArcReactor(size = 120.dp, active = true)
+      ArcReactor(size = 112.dp, active = true)
       Spacer(Modifier.height(4.dp))
-      Text("Meet Jarvis", style = MaterialTheme.typography.displaySmall, color = HudColors.Text)
+      Text("Meet Jarvis", style = JarvisType.HeroSerif, color = HudColors.Text)
       Text(
-        "Your bank alerts, bills, deliveries, calendar and calls, sorted into one calm daily briefing. Everything is read on this phone.",
+        "Your subscriptions, bills, deliveries, day plan and proactive reminders in one calm place. Everything stays on this phone.",
         style = MaterialTheme.typography.bodyLarge,
         color = HudColors.TextDim,
         textAlign = TextAlign.Center,
       )
-      Spacer(Modifier.height(8.dp))
+      Spacer(Modifier.height(6.dp))
       OutlinedTextField(
         value = name,
         onValueChange = { name = it },
@@ -82,34 +94,66 @@ fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
         colors = jarvisTextFieldColors(),
         modifier = Modifier.fillMaxWidth().testTag("onboardingName"),
       )
-      JCard(padding = 12.dp) {
+      BentoCard(padding = 14.dp) {
         Text(
-          "Allow access",
-          style = MaterialTheme.typography.titleMedium,
+          "Profile",
+          style = JarvisType.SectionSerif,
           color = HudColors.Text,
-          modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+          modifier = Modifier.padding(start = 4.dp, top = 2.dp),
         )
         Text(
-          "Pick what Jarvis can read. You can change this any time in Settings.",
+          "Tailors your Today dashboard (shows Cycle & period tracker for Female).",
           style = MaterialTheme.typography.bodySmall,
           color = HudColors.TextDim,
-          modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+          modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          UserGender.entries.forEach { gender ->
+            val isSelected = selectedGender == gender
+            FilterChip(
+              selected = isSelected,
+              onClick = { selectedGenderName = gender.name },
+              label = { Text(gender.label) },
+              shape = CircleShape,
+              colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = if (gender == UserGender.FEMALE) HudColors.BlushSoft else HudColors.SlateBlueSoft,
+                selectedLabelColor = HudColors.Text,
+              ),
+              modifier = Modifier.testTag("onboardingGender-${gender.name}"),
+            )
+          }
+        }
+      }
+      BentoCard(padding = 14.dp) {
+        Text(
+          "Allow access",
+          style = JarvisType.SectionSerif,
+          color = HudColors.Text,
+          modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+        )
+        Text(
+          "Pick what Jarvis can read and notify you about. You can change this any time in Settings.",
+          style = MaterialTheme.typography.bodySmall,
+          color = HudColors.TextDim,
+          modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
         )
         PermissionList(
           state.permissions,
           actions::onRequestRuntimePermissions,
           actions::onOpenNotificationAccessSettings,
           actions::onOpenUsageAccessSettings,
+          includePostNotifications = true,
         )
       }
       Spacer(Modifier.height(4.dp))
       Button(
         onClick = ::finish,
-        modifier = Modifier.fillMaxWidth().height(52.dp).testTag("onboardingStart"),
-        colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cyan, contentColor = HudColors.OnCyan),
+        shape = CircleShape,
+        modifier = Modifier.fillMaxWidth().height(54.dp).testTag("onboardingStart"),
+        colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream),
       ) { Text("Get started", style = MaterialTheme.typography.titleMedium) }
       if (state.permissions.grantedCount == 0) {
-        TextButton(onClick = ::finish) { Text("Skip for now") }
+        TextButton(onClick = ::finish) { Text("Skip for now", color = HudColors.TextDim) }
       }
     }
   }

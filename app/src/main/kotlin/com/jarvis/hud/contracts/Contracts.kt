@@ -5,27 +5,28 @@ import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
 import com.jarvis.hud.model.ConnectionTestResult
+import com.jarvis.hud.model.CycleState
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.DeviceTelemetry
+import com.jarvis.hud.model.HabitItem
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
+import com.jarvis.hud.model.PlannerReminder
+import com.jarvis.hud.model.ProactiveAlert
 import com.jarvis.hud.model.RawEvent
+import com.jarvis.hud.model.SleepLog
+import com.jarvis.hud.model.TimerMode
+import com.jarvis.hud.model.TimerSession
+import com.jarvis.hud.model.TrackedSubscription
+import com.jarvis.hud.model.WorkoutLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
-/*
- * SHARED CONTRACTS between the data, AI and UI layers.
- * All suspend functions must be main-safe (switch to Dispatchers.IO internally) and must
- * never throw for expected failures (missing permission, no network): return empty/failed results.
- */
-
-// ---------- Worker A: data sources (package com.jarvis.hud.data.source) ----------
-
-/** Reads raw on-device data. Returns empty lists when the permission is missing. */
 interface PhoneDataSource {
   suspend fun readSms(sinceMillis: Long, limit: Int = 200): List<RawEvent>
   suspend fun readCalendar(fromMillis: Long, toMillis: Long): List<CalendarEntry>
@@ -34,11 +35,13 @@ interface PhoneDataSource {
   fun readTelemetry(): DeviceTelemetry
 }
 
-/** Live notifications captured by JarvisNotificationListener (process-wide singleton bus). */
+/** Optional hardware step-counter reader (falls back cleanly when no sensor/permission). */
+interface StepSensorSource {
+  suspend fun readTodaySteps(): Int?
+}
+
 interface NotificationFeed {
-  /** Hot stream of notification-derived RawEvents (source = NOTIFICATION). */
   val events: Flow<RawEvent>
-  /** Most recent buffered notifications (bounded, e.g. last 200). */
   fun snapshot(): List<RawEvent>
 }
 
@@ -46,11 +49,8 @@ interface PermissionChecker {
   fun current(): PermissionStatus
 }
 
-// ---------- Worker B: AI + persistence (packages com.jarvis.hud.ai, com.jarvis.hud.data.store) ----------
-
 interface SettingsRepository {
   val settings: StateFlow<JarvisSettings>
-  /** Persists; apiKey must be stored AES-GCM encrypted with an Android Keystore key. */
   suspend fun update(settings: JarvisSettings)
 }
 
@@ -60,16 +60,10 @@ interface OpenRouterClient {
   suspend fun testConnection(apiKey: String, modelId: String): ConnectionTestResult
 }
 
-/** Masks OTPs, card/account numbers, etc. when settings.redactSensitiveData is true. */
 interface Redactor {
   fun redact(text: String): String
 }
 
-/**
- * Turns RawEvents into OrganizedItems. Uses OpenRouter when an apiKey is set and the event's
- * source is in settings.aiShareSources; otherwise (or on AI failure) uses the local
- * deterministic parser (regex for ₹/Rs/INR amounts, debit/credit, due dates, OTP, delivery, travel).
- */
 interface IntelOrganizer {
   suspend fun organize(events: List<RawEvent>, settings: JarvisSettings): List<OrganizedItem>
 }
@@ -83,7 +77,6 @@ interface BriefingGenerator {
   ): DailyBriefing
 }
 
-/** Answers Ask-J.A.R.V.I.S. prompts with HUD context; falls back to a local canned answer without key. */
 interface AskAssistant {
   suspend fun answer(
     prompt: String,
@@ -94,7 +87,6 @@ interface AskAssistant {
   ): ChatMessage
 }
 
-/** Local cache of organized items + processed hashes + today's briefing (JSON file in filesDir). */
 interface IntelStore {
   val items: StateFlow<List<OrganizedItem>>
   suspend fun upsert(items: List<OrganizedItem>)
@@ -106,7 +98,53 @@ interface IntelStore {
   suspend fun clear()
 }
 
-// ---------- Worker D: voice (package com.jarvis.hud.ui.voice) ----------
+/** Persists reminders, custom/paused subscriptions, proactive alert state, and personal wellness logs. */
+interface PlannerStore {
+  val reminders: StateFlow<List<PlannerReminder>>
+  val customSubscriptions: StateFlow<List<TrackedSubscription>>
+  val pausedSubscriptionIds: StateFlow<Set<String>>
+  val deletedSubscriptionIds: StateFlow<Set<String>>
+  val dismissedAlertKeys: StateFlow<Set<String>>
+  val notifiedAlertKeys: StateFlow<Set<String>>
+
+  val meals: StateFlow<List<MealLog>>
+  val sleepLogs: StateFlow<List<SleepLog>>
+  val workouts: StateFlow<List<WorkoutLog>>
+  val habits: StateFlow<List<HabitItem>>
+  val stepsByDate: StateFlow<Map<String, Int>>
+  val timerSession: StateFlow<TimerSession>
+  val cycleState: StateFlow<CycleState>
+
+  suspend fun addReminder(reminder: PlannerReminder)
+  suspend fun toggleReminder(id: String)
+  suspend fun deleteReminder(id: String)
+
+  suspend fun addSubscription(sub: TrackedSubscription)
+  suspend fun toggleSubscriptionPaused(id: String)
+  suspend fun deleteSubscription(id: String)
+
+  suspend fun dismissAlert(dedupKey: String)
+  suspend fun markNotified(dedupKeys: Collection<String>)
+
+  suspend fun addMeal(meal: MealLog)
+  suspend fun deleteMeal(id: String)
+  suspend fun saveSleep(sleep: SleepLog)
+  suspend fun addWorkout(workout: WorkoutLog)
+  suspend fun deleteWorkout(id: String)
+  suspend fun toggleHabit(habitId: String, dateKey: String)
+  suspend fun addHabit(habit: HabitItem)
+  suspend fun deleteHabit(habitId: String)
+  suspend fun recordSteps(dateKey: String, steps: Int)
+  suspend fun startTimer(mode: TimerMode, targetMinutes: Int, nowMillis: Long, dateKey: String)
+  suspend fun stopTimer(nowMillis: Long, dateKey: String)
+  suspend fun togglePeriodDay(dateKey: String)
+  suspend fun setCycleLength(days: Int)
+}
+
+interface ProactiveNotifier {
+  fun notifyAlerts(alerts: List<ProactiveAlert>, settings: JarvisSettings, alreadyNotified: Set<String>): List<String>
+  fun sendTestNotification(callsign: String): Boolean
+}
 
 interface Speaker {
   val isSpeaking: StateFlow<Boolean>
@@ -115,11 +153,9 @@ interface Speaker {
   fun shutdown()
 }
 
-// ---------- Integrator wiring ----------
-
-/** Built in JarvisApplication; ViewModel gets everything from here. */
 interface JarvisContainer {
   val phoneData: PhoneDataSource
+  val stepSensor: StepSensorSource
   val notifications: NotificationFeed
   val permissions: PermissionChecker
   val settingsRepo: SettingsRepository
@@ -128,8 +164,9 @@ interface JarvisContainer {
   val briefings: BriefingGenerator
   val assistant: AskAssistant
   val store: IntelStore
+  val plannerStore: PlannerStore
+  val notifier: ProactiveNotifier
   val speaker: Speaker
 }
 
-/** Convenience: which sources are enabled. */
 fun JarvisSettings.isEnabled(source: DataSource) = source in enabledSources

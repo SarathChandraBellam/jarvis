@@ -13,18 +13,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,6 +34,7 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -71,6 +70,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -81,6 +82,7 @@ import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.model.OpenRouterModelInfo
+import com.jarvis.hud.model.UserGender
 import com.jarvis.hud.ui.components.EmptyLine
 import com.jarvis.hud.ui.components.JCard
 import com.jarvis.hud.ui.components.ListRow
@@ -89,19 +91,14 @@ import com.jarvis.hud.ui.components.Pill
 import com.jarvis.hud.ui.components.SectionHeader
 import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.theme.JarvisType
 import kotlinx.coroutines.delay
 
-/** How long after the last edit we persist. Toggles and typing both go through this. */
 private const val AUTOSAVE_DELAY_MS = 400L
 
-/**
- * Settings. Every change saves automatically (debounced), and anything still pending is saved
- * when the screen closes — there is no Save button to miss.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: SnackbarHostState) {
-  // Initialized once per visit. Not keyed on state.settings, so a save landing mid-typing can't wipe keystrokes.
   var draft by remember { mutableStateOf(state.settings) }
   val saved = state.settings
   val dirty = draft != saved
@@ -119,7 +116,6 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
   }
   BackHandler(onBack = actions::onCloseSettings)
 
-  /** Persist now (used before actions that read the saved key/model). */
   fun flush() {
     if (draft != saved) actions.onUpdateSettings(draft)
   }
@@ -131,7 +127,7 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
       TopAppBar(
         title = {
           Column {
-            Text("Settings", style = MaterialTheme.typography.titleLarge)
+            Text("Settings", style = JarvisType.TitleSerif)
             SaveStatus(dirty = dirty, failed = dirty && state.lastError != null)
           }
         },
@@ -149,89 +145,187 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
     },
   ) { inner ->
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.TopCenter) {
-    Column(
-      Modifier
-        .widthIn(max = 720.dp)
-        .fillMaxSize()
-        .imePadding()
-        .verticalScroll(rememberScrollState())
-        .padding(horizontal = 16.dp)
-        .testTag("settings"),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-      SectionHeader("Profile")
-      JCard {
-        OutlinedTextField(
-          value = draft.userCallsign,
-          onValueChange = { draft = draft.copy(userCallsign = it) },
-          label = { Text("What should Jarvis call you?") },
-          placeholder = { Text("Sir") },
-          singleLine = true,
-          shape = MaterialTheme.shapes.medium,
-          colors = jarvisTextFieldColors(),
-          modifier = Modifier.fillMaxWidth().testTag("callsignField"),
+      Column(
+        Modifier
+          .widthIn(max = 720.dp)
+          .fillMaxSize()
+          .imePadding()
+          .verticalScroll(rememberScrollState())
+          .padding(horizontal = 18.dp)
+          .testTag("settings"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        SectionHeader("Profile")
+        JCard {
+          OutlinedTextField(
+            value = draft.userCallsign,
+            onValueChange = { draft = draft.copy(userCallsign = it) },
+            label = { Text("What should Jarvis call you?") },
+            placeholder = { Text("Sir") },
+            singleLine = true,
+            shape = MaterialTheme.shapes.medium,
+            colors = jarvisTextFieldColors(),
+            modifier = Modifier.fillMaxWidth().testTag("callsignField"),
+          )
+          Spacer(Modifier.size(12.dp))
+          Text("Gender", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+          Spacer(Modifier.size(6.dp))
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UserGender.entries.forEach { gender ->
+              FilterChip(
+                selected = draft.userGender == gender,
+                onClick = {
+                  draft = draft.copy(
+                    userGender = gender,
+                    cycleTrackingEnabled = gender == UserGender.FEMALE,
+                  )
+                },
+                label = { Text(gender.label) },
+                shape = CircleShape,
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = if (gender == UserGender.FEMALE) HudColors.BlushSoft else HudColors.SlateBlueSoft,
+                  selectedLabelColor = HudColors.Text,
+                ),
+                modifier = Modifier.testTag("settingsGender-${gender.name}"),
+              )
+            }
+          }
+          Spacer(Modifier.size(4.dp))
+          Text(
+            if (draft.userGender == UserGender.FEMALE) "Cycle & period tracker is shown in Today."
+            else "Cycle & period tracker is hidden for Male profile.",
+            style = MaterialTheme.typography.bodySmall,
+            color = HudColors.TextMuted,
+          )
+        }
+
+        SectionHeader("Proactive alerts & focus")
+        ProactiveCard(
+          draft = draft,
+          onChange = { draft = it },
+          onSendTest = { flush(); actions.onSendTestProactiveAlert() },
         )
-      }
 
-      SectionHeader("AI model")
-      AiCard(state, draft, onChange = { draft = it }, flush = ::flush, actions = actions)
+        SectionHeader("AI model")
+        AiCard(state, draft, onChange = { draft = it }, flush = ::flush, actions = actions)
 
-      SectionHeader("Assistant")
-      JCard(padding = 8.dp) {
-        SwitchRow(
-          "Voice replies",
-          "Read briefings and answers out loud",
-          Icons.Outlined.RecordVoiceOver,
-          draft.voiceEnabled,
-        ) { draft = draft.copy(voiceEnabled = it) }
-        SwitchRow(
-          "Hide sensitive data",
-          "Mask OTPs, card and account numbers before anything is sent to the AI",
-          Icons.Outlined.Lock,
-          draft.redactSensitiveData,
-        ) { draft = draft.copy(redactSensitiveData = it) }
-      }
+        SectionHeader("Assistant")
+        JCard(padding = 8.dp) {
+          if (draft.userGender == UserGender.FEMALE) {
+            SwitchRow(
+              "Cycle & period tracker",
+              "Show cycle phase context, period calendar & phase-aware insights",
+              Icons.Outlined.NotificationsActive,
+              draft.cycleTrackingEnabled,
+            ) { draft = draft.copy(cycleTrackingEnabled = it) }
+          }
+          SwitchRow(
+            "Voice replies",
+            "Read briefings and answers out loud",
+            Icons.Outlined.RecordVoiceOver,
+            draft.voiceEnabled,
+          ) { draft = draft.copy(voiceEnabled = it) }
+          SwitchRow(
+            "Hide sensitive data",
+            "Mask OTPs, card and account numbers before anything is sent to the AI",
+            Icons.Outlined.Lock,
+            draft.redactSensitiveData,
+          ) { draft = draft.copy(redactSensitiveData = it) }
+        }
 
-      SectionHeader("Phone access")
-      JCard(padding = 12.dp) {
-        PermissionList(
-          state.permissions,
-          actions::onRequestRuntimePermissions,
-          actions::onOpenNotificationAccessSettings,
-          actions::onOpenUsageAccessSettings,
-        )
-      }
+        SectionHeader("Phone access")
+        JCard(padding = 12.dp) {
+          PermissionList(
+            state.permissions,
+            actions::onRequestRuntimePermissions,
+            actions::onOpenNotificationAccessSettings,
+            actions::onOpenUsageAccessSettings,
+            includePostNotifications = true,
+          )
+        }
 
-      SectionHeader("Data sources")
-      JCard {
-        Text("Read from", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
-        Spacer(Modifier.height(8.dp))
-        SourceChips(draft.enabledSources, HudColors.Cyan) { draft = draft.copy(enabledSources = it) }
-        Spacer(Modifier.height(16.dp))
-        Text("Send to AI", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
-        Spacer(Modifier.height(8.dp))
-        SourceChips(draft.aiShareSources, HudColors.Amber) { draft = draft.copy(aiShareSources = it) }
-        Spacer(Modifier.height(10.dp))
+        SectionHeader("Data sources")
+        JCard {
+          Text("Read from", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+          Spacer(Modifier.size(8.dp))
+          SourceChips(draft.enabledSources, HudColors.SlateBlue) { draft = draft.copy(enabledSources = it) }
+          Spacer(Modifier.size(16.dp))
+          Text("Send to AI", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+          Spacer(Modifier.size(8.dp))
+          SourceChips(draft.aiShareSources, HudColors.Sand) { draft = draft.copy(aiShareSources = it) }
+          Spacer(Modifier.size(10.dp))
+          Text(
+            "Sources not sent to the AI are still organized on your phone with built-in rules.",
+            style = MaterialTheme.typography.bodySmall,
+            color = HudColors.TextMuted,
+          )
+        }
+
+        SectionHeader("Storage")
+        ClearCacheCard(actions::onClearAiCache)
+
         Text(
-          "Sources not sent to the AI are still organized on your phone with built-in rules.",
+          "Selections & reminders persist across restarts · Jarvis ${appVersion()}",
           style = MaterialTheme.typography.bodySmall,
           color = HudColors.TextMuted,
+          modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
         )
       }
-
-      SectionHeader("Money")
-      BudgetCard(draft.monthlyBudget) { draft = draft.copy(monthlyBudget = it) }
-
-      SectionHeader("Storage")
-      ClearCacheCard(actions::onClearAiCache)
-
-      Text(
-        "Changes save automatically · Jarvis ${appVersion()}",
-        style = MaterialTheme.typography.bodySmall,
-        color = HudColors.TextMuted,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-      )
     }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProactiveCard(
+  draft: JarvisSettings,
+  onChange: (JarvisSettings) -> Unit,
+  onSendTest: () -> Unit,
+) {
+  JCard {
+    SwitchRow(
+      "Proactive notifications",
+      "Alert me before subscription renewals, bills, reminders and deliveries",
+      Icons.Outlined.NotificationsActive,
+      draft.proactiveNotificationsEnabled,
+    ) { onChange(draft.copy(proactiveNotificationsEnabled = it)) }
+    Spacer(Modifier.size(10.dp))
+    Text("Renewal lead time", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+    Spacer(Modifier.size(6.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      listOf(1 to "1 day before", 3 to "3 days before", 7 to "7 days before").forEach { (days, label) ->
+        FilterChip(
+          selected = draft.renewalLeadDays == days,
+          onClick = { onChange(draft.copy(renewalLeadDays = days)) },
+          label = { Text(label) },
+          shape = CircleShape,
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = HudColors.BlushSoft,
+            selectedLabelColor = HudColors.Text,
+          ),
+        )
+      }
+    }
+    Spacer(Modifier.size(10.dp))
+    Text("Daily screen-time focus limit", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+    Spacer(Modifier.size(6.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      listOf(60 to "1h", 120 to "2h", 180 to "3h", 240 to "4h").forEach { (mins, label) ->
+        FilterChip(
+          selected = draft.dailyFocusGoalMinutes == mins,
+          onClick = { onChange(draft.copy(dailyFocusGoalMinutes = mins)) },
+          label = { Text(label) },
+          shape = CircleShape,
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = HudColors.SageSoft,
+            selectedLabelColor = HudColors.Text,
+          ),
+        )
+      }
+    }
+    Spacer(Modifier.size(12.dp))
+    OutlinedButton(onClick = onSendTest, modifier = Modifier.fillMaxWidth()) {
+      Text("Send test notification")
     }
   }
 }
@@ -239,9 +333,9 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
 @Composable
 private fun SaveStatus(dirty: Boolean, failed: Boolean) {
   val (icon, text, color) = when {
-    failed -> Triple(Icons.Outlined.CloudOff, "Couldn't save", HudColors.Red)
+    failed -> Triple(Icons.Outlined.CloudOff, "Couldn't save", HudColors.Coral)
     dirty -> Triple(Icons.Outlined.CloudSync, "Saving…", HudColors.TextDim)
-    else -> Triple(Icons.Outlined.CloudDone, "All changes saved", HudColors.Green)
+    else -> Triple(Icons.Outlined.CloudDone, "All changes saved", HudColors.Sage)
   }
   Row(verticalAlignment = Alignment.CenterVertically) {
     Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
@@ -265,7 +359,7 @@ private fun AiCard(
       style = MaterialTheme.typography.bodySmall,
       color = HudColors.TextDim,
     )
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.size(12.dp))
     OutlinedTextField(
       value = draft.apiKey,
       onValueChange = { onChange(draft.copy(apiKey = it.trim())) },
@@ -284,7 +378,7 @@ private fun AiCard(
       colors = jarvisTextFieldColors(),
       modifier = Modifier.fillMaxWidth().testTag("apiKeyField"),
     )
-    Spacer(Modifier.height(4.dp))
+    Spacer(Modifier.size(4.dp))
     OutlinedTextField(
       value = draft.modelId,
       onValueChange = { onChange(draft.copy(modelId = it.trim())) },
@@ -294,7 +388,7 @@ private fun AiCard(
       colors = jarvisTextFieldColors(),
       modifier = Modifier.fillMaxWidth(),
     )
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.size(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedButton(
         onClick = { flush(); actions.onTestOpenRouterConnection() },
@@ -314,10 +408,10 @@ private fun AiCard(
       }
     }
     state.connectionTestResult?.let { r ->
-      Spacer(Modifier.height(10.dp))
-      val c = if (r.success) HudColors.Green else HudColors.Red
+      Spacer(Modifier.size(10.dp))
+      val c = if (r.success) HudColors.Sage else HudColors.Coral
       Row(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(c.copy(alpha = 0.1f)).padding(10.dp),
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(c.copy(alpha = 0.12f)).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Icon(if (r.success) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline, null, tint = c, modifier = Modifier.size(18.dp))
@@ -327,7 +421,7 @@ private fun AiCard(
       }
     }
     if (state.availableModels.isNotEmpty()) {
-      Spacer(Modifier.height(12.dp))
+      Spacer(Modifier.size(12.dp))
       ModelList(state.availableModels, draft.modelId) { onChange(draft.copy(modelId = it)) }
     }
   }
@@ -343,14 +437,15 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
       selected = freeOnly,
       onClick = { freeOnly = !freeOnly },
       label = { Text("Free only") },
+      shape = CircleShape,
       colors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = HudColors.Green.copy(alpha = 0.18f),
+        selectedContainerColor = HudColors.SageSoft,
         selectedLabelColor = HudColors.Text,
         labelColor = HudColors.TextDim,
       ),
     )
   }
-  Spacer(Modifier.height(6.dp))
+  Spacer(Modifier.size(6.dp))
   LazyColumn(
     Modifier
       .fillMaxWidth()
@@ -365,7 +460,7 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
         Modifier
           .fillMaxWidth()
           .clip(MaterialTheme.shapes.small)
-          .background(if (sel) HudColors.CyanSoft else Color.Transparent)
+          .background(if (sel) HudColors.SandSoft else Color.Transparent)
           .clickable { onSelect(m.id) }
           .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -380,8 +475,8 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
             overflow = TextOverflow.Ellipsis,
           )
         }
-        if (m.isFree) Pill("Free", HudColors.Green, Modifier.padding(start = 8.dp))
-        if (sel) Icon(Icons.Outlined.CheckCircle, "Selected", tint = HudColors.Cyan, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+        if (m.isFree) Pill("Free", HudColors.Sage, Modifier.padding(start = 8.dp))
+        if (sel) Icon(Icons.Outlined.CheckCircle, "Selected", tint = HudColors.Cream, modifier = Modifier.padding(start = 8.dp).size(18.dp))
       }
     }
     if (shown.isEmpty()) item { EmptyLine("No models match", Modifier.padding(8.dp)) }
@@ -400,15 +495,16 @@ private fun SwitchRow(
     title = title,
     subtitle = sub,
     icon = icon,
+    tint = HudColors.Sand,
     onClick = { onChange(!checked) },
-    modifier = Modifier.padding(horizontal = 8.dp),
+    modifier = Modifier.padding(horizontal = 6.dp),
     trailing = {
       Switch(
         checked = checked,
         onCheckedChange = onChange,
         colors = SwitchDefaults.colors(
-          checkedThumbColor = HudColors.OnCyan,
-          checkedTrackColor = HudColors.Cyan,
+          checkedThumbColor = HudColors.OnCream,
+          checkedTrackColor = HudColors.Cream,
           uncheckedThumbColor = HudColors.TextDim,
           uncheckedTrackColor = HudColors.SurfaceHigh,
           uncheckedBorderColor = HudColors.Outline,
@@ -431,11 +527,11 @@ private fun SourceChips(selected: Set<DataSource>, accent: Color, onChange: (Set
         leadingIcon = if (on) {
           { Icon(Icons.Outlined.CheckCircle, null, Modifier.size(16.dp)) }
         } else null,
-        shape = MaterialTheme.shapes.small,
+        shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(
           containerColor = HudColors.Surface,
           labelColor = HudColors.TextDim,
-          selectedContainerColor = accent.copy(alpha = 0.18f),
+          selectedContainerColor = accent.copy(alpha = 0.14f),
           selectedLabelColor = HudColors.Text,
           selectedLeadingIconColor = accent,
         ),
@@ -443,7 +539,7 @@ private fun SourceChips(selected: Set<DataSource>, accent: Color, onChange: (Set
           enabled = true,
           selected = on,
           borderColor = HudColors.Outline,
-          selectedBorderColor = accent.copy(alpha = 0.6f),
+          selectedBorderColor = accent.copy(alpha = 0.5f),
         ),
       )
     }
@@ -458,7 +554,7 @@ private fun ClearCacheCard(onClear: () -> Unit) {
       title = "Clear organized data",
       subtitle = "Deletes the saved inbox and briefing, then re-scans your phone",
       icon = Icons.Outlined.DeleteOutline,
-      tint = HudColors.Red,
+      tint = HudColors.Coral,
       onClick = { confirm = true },
       modifier = Modifier.padding(horizontal = 8.dp),
     )
@@ -471,35 +567,11 @@ private fun ClearCacheCard(onClear: () -> Unit) {
       confirmButton = {
         TextButton(
           onClick = { confirm = false; onClear() },
-          colors = ButtonDefaults.textButtonColors(contentColor = HudColors.Red),
+          colors = ButtonDefaults.textButtonColors(contentColor = HudColors.Coral),
         ) { Text("Clear") }
       },
       dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
-      containerColor = HudColors.SurfaceHigh,
-    )
-  }
-}
-
-@Composable
-private fun BudgetCard(budget: Double, onChange: (Double) -> Unit) {
-  var text by remember { mutableStateOf(if (budget > 0) budget.toLong().toString() else "") }
-  JCard {
-    OutlinedTextField(
-      value = text,
-      onValueChange = { v ->
-        val digits = v.filter { it.isDigit() }.take(9)
-        text = digits
-        onChange(digits.toDoubleOrNull() ?: 0.0)
-      },
-      label = { Text("Monthly budget") },
-      placeholder = { Text("No budget") },
-      prefix = { Text("₹") },
-      singleLine = true,
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-      supportingText = { Text("Shows how much you have left this month on the Money tab") },
-      shape = MaterialTheme.shapes.medium,
-      colors = jarvisTextFieldColors(),
-      modifier = Modifier.fillMaxWidth().testTag("budgetField"),
+      containerColor = HudColors.Surface,
     )
   }
 }

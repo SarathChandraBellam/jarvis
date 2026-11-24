@@ -1,23 +1,35 @@
 package com.jarvis.hud.ui.screens
 
 import com.jarvis.hud.model.AppUsageStat
+import com.jarvis.hud.model.BillingCadence
 import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
+import com.jarvis.hud.model.CycleState
 import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
+import com.jarvis.hud.model.HabitItem
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.IntelCategory
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.JarvisUiState
+import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
+import com.jarvis.hud.model.PlannerReminder
 import com.jarvis.hud.model.Priority
+import com.jarvis.hud.model.ProactiveAlert
+import com.jarvis.hud.model.ProactiveKind
+import com.jarvis.hud.model.SleepLog
+import com.jarvis.hud.model.SubscriptionCategory
+import com.jarvis.hud.model.TimerMode
+import com.jarvis.hud.model.TimerSession
+import com.jarvis.hud.model.TrackedSubscription
+import com.jarvis.hud.model.WorkoutLog
 
-/** Fake data + no-op actions for @Preview functions. Not used at runtime. */
 object PreviewFixtures {
   val noOpActions: JarvisActions = object : JarvisActions {
     override fun onSelectTab(tab: HudTab) {}
@@ -42,16 +54,11 @@ object PreviewFixtures {
 
   fun state(tab: HudTab = HudTab.HUD, now: Long = System.currentTimeMillis()): JarvisUiState {
     val h = 3_600_000L
-    val d = 24 * h
-    // Due dates are ISO yyyy-MM-dd, as the parser and AI produce them.
-    fun dueIn(days: Long) = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
-      .toLocalDate().plusDays(days).toString()
-    fun fin(id: String, title: String, amt: Double, merchant: String, ago: Long, credit: Boolean = false, p: Priority = Priority.NORMAL) =
-      OrganizedItem(
-        id = id, rawEventId = null, category = IntelCategory.FINANCE, title = title,
-        summary = if (credit) "Credited to A/c XX4821" else "Debited from A/c XX4821 via UPI",
-        amount = amt, isCredit = credit, merchant = merchant, priority = p, timestamp = now - ago, source = DataSource.SMS,
-      )
+    val zone = java.time.ZoneId.systemDefault()
+    val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val todayKey = today.toString()
+    fun dueIn(days: Long) = today.plusDays(days).toString()
+
     val items = listOf(
       OrganizedItem("b1", null, IntelCategory.BILL, "HDFC credit card bill", "Total due ₹18,420 · min ₹920",
         amount = 18420.0, dueDate = dueIn(2), priority = Priority.CRITICAL, timestamp = now - 2 * h, source = DataSource.SMS),
@@ -63,43 +70,102 @@ object PreviewFixtures {
         dueDate = "24 Nov 06:40", timestamp = now - 5 * h, source = DataSource.SMS),
       OrganizedItem("m1", null, IntelCategory.MESSAGE, "Pepper Potts", "Dinner at 8? Don't be late again.",
         timestamp = now - 30 * 60_000L, source = DataSource.NOTIFICATION),
-      fin("f1", "Swiggy order", 486.0, "Swiggy", 3 * h),
-      fin("f2", "Salary credited", 125000.0, "ACME Corp", 26 * h, credit = true),
-      fin("f3", "Uber trip", 312.5, "Uber", 2 * d),
-      fin("f4", "Amazon purchase", 2499.0, "Amazon", 3 * d),
-      fin("f5", "Zepto groceries", 1243.0, "Zepto", 4 * d),
-      fin("f6", "Swiggy order", 612.0, "Swiggy", 5 * d),
-      fin("f7", "Large debit alert", 24999.0, "Croma", 6 * h, p = Priority.HIGH),
+      OrganizedItem("s1", null, IntelCategory.FINANCE, "₹649 debited · Netflix", "Autopay subscription renewed",
+        amount = 649.0, merchant = "Netflix", timestamp = now - 4 * h, source = DataSource.SMS),
     )
+
+    val subs = listOf(
+      TrackedSubscription("sub1", "Netflix", 649.0, cadence = BillingCadence.MONTHLY, category = SubscriptionCategory.STREAMING, nextRenewalDate = dueIn(2), sourceNote = "Auto-pay"),
+      TrackedSubscription("sub2", "ChatGPT Plus", 1999.0, cadence = BillingCadence.MONTHLY, category = SubscriptionCategory.SOFTWARE, nextRenewalDate = dueIn(4), sourceNote = "Card ending 4821"),
+      TrackedSubscription("sub3", "JioFiber", 999.0, cadence = BillingCadence.MONTHLY, category = SubscriptionCategory.TELECOM, nextRenewalDate = dueIn(6), sourceNote = "Broadband"),
+      TrackedSubscription("sub4", "cult.fit", 1490.0, cadence = BillingCadence.MONTHLY, category = SubscriptionCategory.FITNESS, nextRenewalDate = dueIn(11), isTrial = true, sourceNote = "Trial ends soon"),
+      TrackedSubscription("sub5", "Spotify", 119.0, cadence = BillingCadence.MONTHLY, category = SubscriptionCategory.STREAMING, nextRenewalDate = dueIn(14), sourceNote = "UPI mandate"),
+    )
+
+    val meals = listOf(
+      MealLog("ml1", "Poha, idli & 2 eggs", 475, 22, 62, 14, todayKey, now - 4 * h),
+      MealLog("ml2", "Chicken biryani bowl", 520, 34, 58, 16, todayKey, now - 1 * h),
+    )
+
+    val sleepLogs = listOf(
+      SleepLog("sl0", todayKey, 7 * 60 + 15, "11:45 PM", "7:00 AM", qualityScore = 84, deepMinutes = 76, remMinutes = 115, lightMinutes = 228, awakeMinutes = 16),
+      SleepLog("sl1", today.minusDays(1).toString(), 6 * 60 + 37, "1:13 AM", "8:01 AM", qualityScore = 76),
+      SleepLog("sl2", today.minusDays(2).toString(), 7 * 60 + 45, "11:15 PM", "7:00 AM", qualityScore = 88),
+    )
+
+    val workouts = listOf(
+      WorkoutLog("wk1", "Evening cycling", 40, 320, todayKey, now - 2 * h),
+    )
+
+    val habits = listOf(
+      HabitItem("h1", "2L Water", setOf(todayKey, today.minusDays(1).toString())),
+      HabitItem("h2", "Magnesium 400mg", setOf(todayKey)),
+      HabitItem("h3", "Phone away 10:30 PM", setOf(today.minusDays(1).toString())),
+    )
+
+    val stepsMap = mapOf(
+      today.minusDays(5).toString() to 6420,
+      today.minusDays(4).toString() to 8190,
+      today.minusDays(3).toString() to 5310,
+      today.minusDays(2).toString() to 9840,
+      today.minusDays(1).toString() to 7210,
+      todayKey to 8640,
+    )
+
+    val cycle = CycleState(
+      periodStartDates = listOf(today.minusDays(45).toString(), today.minusDays(15).toString()),
+      cycleLengthDays = 30,
+      periodDurationDays = 5,
+    )
+
+    val reminders = listOf(
+      PlannerReminder("r1", "Review Netflix & trial renewals", 10 * 60 + 30, todayKey, isDone = false),
+      PlannerReminder("r2", "Evening walk & tea away from screens", 18 * 60, todayKey, isDone = true),
+    )
+
+    val alerts = listOf(
+      ProactiveAlert("pa1", "sub:sub1", ProactiveKind.RENEWAL, "Netflix renews in 2 days", "₹649 · Monthly. Pause in Subs if not needed.", Priority.HIGH, now, HudTab.FINANCE),
+      ProactiveAlert("pa2", "bill:b1", ProactiveKind.BILL, "HDFC Credit Card due in 2 days", "₹18,420 · Tap Subs to mark paid.", Priority.CRITICAL, now - h, HudTab.FINANCE),
+    )
+
     return JarvisUiState(
       selectedTab = tab,
-      syncStatusLine = "Up to date · 12 new items",
-      settings = JarvisSettings(userCallsign = "Tony", apiKey = "sk-or-v1-preview", onboardingDone = true, monthlyBudget = 60000.0),
-      permissions = PermissionStatus(true, false, true, true, false),
+      syncStatusLine = "Up to date · 6 new items",
+      settings = JarvisSettings(userCallsign = "Tony", apiKey = "sk-or-v1-preview", onboardingDone = true),
+      permissions = PermissionStatus(true, false, true, true, true, true, true),
       briefing = DailyBriefing(
-        dateKey = "2026-11-22",
-        headline = "One critical bill, one delivery inbound.",
-        summary = "Your HDFC card bill of ₹18,420 is due in three days. Amazon is out for delivery and you've spent ₹25,485 today.",
-        highlights = listOf("Card bill due 25 Nov", "Airdopes arriving by 7 PM", "Flight to Delhi on the 24th"),
+        dateKey = todayKey,
+        headline = "Calm rhythm ahead, Tony.",
+        summary = "You slept 7h 15m and logged 8,640 steps. Netflix and HDFC bill arrive in two days.",
+        highlights = listOf("Netflix renews in 2 days · ₹649", "Mid-cycle Day 16 · steady energy", "Airdopes arriving by 7 PM"),
         modelUsed = "google/gemini-2.5-flash",
         createdAt = now - 15 * 60_000L,
       ),
       items = items,
+      subscriptions = subs,
+      reminders = reminders,
+      proactiveAlerts = alerts,
+      meals = meals,
+      sleepLogs = sleepLogs,
+      workouts = workouts,
+      habits = habits,
+      stepsByDate = stepsMap,
+      timerSession = TimerSession(isRunning = true, mode = TimerMode.FASTING, startedAtMillis = now - 11 * h, targetMinutes = 16 * 60, completedFocusMinutesToday = 45, lastFastedMinutes = 945, lastDateKey = todayKey),
+      cycleState = cycle,
       calendarEntries = listOf(
         CalendarEntry("c1", "Stand-up with R&D", now - h, now - h / 2, "Workshop"),
-        CalendarEntry("c2", "Board review", now + h, now + 2 * h, "Stark Tower, 93F"),
+        CalendarEntry("c2", "Design review", now + h, now + 2 * h, "Studio"),
       ),
       recentCalls = listOf(
         CallSummary("k1", "Happy Hogan", "INCOMING", 184, now - 2 * h),
         CallSummary("k2", "+91 98xxxxxx21", "MISSED", 0, now - 4 * h),
-        CallSummary("k3", "Rhodey", "OUTGOING", 642, now - 9 * h),
       ),
       appUsageStats = listOf(
-        AppUsageStat("a", "YouTube", 96), AppUsageStat("b", "WhatsApp", 64), AppUsageStat("c", "Chrome", 41),
+        AppUsageStat("a", "YouTube", 64), AppUsageStat("b", "WhatsApp", 42),
       ),
       chatMessages = listOf(
-        ChatMessage("u1", true, "What did I spend today?", now - 4 * 60_000L),
-        ChatMessage("a1", false, "₹25,485 across three debits today, sir — the bulk being ₹24,999 at Croma.", now - 3 * 60_000L,
+        ChatMessage("u1", true, "What subscriptions renew soon?", now - 4 * 60_000L),
+        ChatMessage("a1", false, "Netflix (₹649) renews in 2 days and ChatGPT Plus (₹1,999) in 4 days.", now - 3 * 60_000L,
           modelUsed = "google/gemini-2.5-flash"),
       ),
       availableModels = listOf(

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.UserGender
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -49,6 +50,20 @@ class SettingsPersistenceTest {
       aiShareSources = setOf(DataSource.SMS),
       onboardingDone = true,
       monthlyBudget = 42_000.0,
+      selectedTabName = "FINANCE",
+      todayViewIndex = 2,
+      subsViewIndex = 1,
+      inboxCategoryName = "BILL",
+      inboxShowCompleted = true,
+      proactiveNotificationsEnabled = false,
+      renewalLeadDays = 7,
+      morningBriefingHour = 9,
+      dailyFocusGoalMinutes = 180,
+      dailyCalorieGoal = 2100,
+      dailyStepGoal = 10000,
+      sleepGoalMinutes = 450,
+      userGender = UserGender.MALE,
+      cycleTrackingEnabled = false,
     )
     SharedPrefsSettingsRepository(ctx, cipher).update(edited)
     val reloaded = SharedPrefsSettingsRepository(ctx, cipher).settings.value
@@ -107,5 +122,19 @@ class SettingsPersistenceTest {
     prefs.edit().putBoolean("demo_mode", true).commit()
     SharedPrefsSettingsRepository(ctx, FakeCipher()).update(JarvisSettings())
     assertFalse(prefs.contains("demo_mode"))
+  }
+
+  @Test fun mismatchedSinglePreferenceDoesNotWipeOtherSelections() = runTest {
+    val cipher = FakeCipher()
+    SharedPrefsSettingsRepository(ctx, cipher).update(
+      JarvisSettings(userCallsign = "Pepper", onboardingDone = true, selectedTabName = "INTEL", subsViewIndex = 2),
+    )
+    // Simulate a legacy/mismatched type on one key across an upgrade.
+    prefs.edit().putString("subs_view_index", "bad-type").commit()
+    val reloaded = SharedPrefsSettingsRepository(ctx, cipher).settings.value
+    assertEquals("Pepper", reloaded.userCallsign)
+    assertTrue(reloaded.onboardingDone)
+    assertEquals("INTEL", reloaded.selectedTabName)
+    assertEquals(0, reloaded.subsViewIndex)
   }
 }

@@ -9,98 +9,66 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.ui.theme.HudColors
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
- * Static arc reactor: glowing core, segmented rings and tick dial.
- * Glows brighter while [active] (syncing or speaking). Not animated, to keep CPU/GPU idle.
+ * Calm pastel halo emblem for warm paper UI: soft blush, sage, lavender, and slate-blue
+ * phase arcs around a warm cream-gold center. Static to keep CPU/GPU idle.
  */
 @Composable
 fun ArcReactor(
   modifier: Modifier = Modifier,
   size: Dp = 168.dp,
   active: Boolean = false,
-  color: Color = HudColors.Cyan,
+  color: Color = HudColors.Blush,
 ) {
-  // Static drawing (no animation): rings sit at fixed angles; glows brighter while [active].
-  val spin = 0f
-  val counter = 15f
-  val pulse = if (active) 1f else 0.75f
-
+  val alphaBoost = if (active) 1f else 0.78f
   Canvas(modifier.size(size)) {
     val c = center
     val r = this.size.minDimension / 2f
 
-    // Outer glow halo.
     drawCircle(
       Brush.radialGradient(
-        listOf(color.copy(alpha = 0.28f * pulse), Color.Transparent),
-        center = c, radius = r,
+        listOf(color.copy(alpha = 0.22f * alphaBoost), HudColors.SandSoft, Color.Transparent),
+        center = c,
+        radius = r,
       ),
       radius = r,
     )
 
-    // Tick dial.
-    val ticks = 60
-    for (i in 0 until ticks) {
-      val a = Math.toRadians((i * 360.0 / ticks) + spin / 6)
-      val long = i % 5 == 0
-      val r1 = r * 0.93f
-      val r2 = r * (if (long) 0.84f else 0.88f)
-      drawLine(
-        color.copy(alpha = if (long) 0.8f else 0.35f),
-        Offset(c.x + (r1 * cos(a)).toFloat(), c.y + (r1 * sin(a)).toFloat()),
-        Offset(c.x + (r2 * cos(a)).toFloat(), c.y + (r2 * sin(a)).toFloat()),
-        strokeWidth = if (long) 2.dp.toPx() else 1.dp.toPx(),
+    val outerR = r * 0.78f
+    val outerTopLeft = Offset(c.x - outerR, c.y - outerR)
+    val outerSz = Size(outerR * 2, outerR * 2)
+    val phaseColors = listOf(HudColors.Blush, HudColors.Sand, HudColors.Sage, HudColors.Lavender)
+    phaseColors.forEachIndexed { idx, cPhase ->
+      drawArc(
+        color = cPhase.copy(alpha = 0.85f * alphaBoost),
+        startAngle = -90f + idx * 90f + 7f,
+        sweepAngle = 76f,
+        useCenter = false,
+        topLeft = outerTopLeft,
+        size = outerSz,
+        style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round),
       )
     }
 
-    // Segmented ring (rotating).
-    rotate(spin, c) {
-      segmentedRing(color.copy(alpha = 0.9f), r * 0.76f, 6.dp.toPx(), segments = 3, gapDeg = 28f)
-    }
-    // Thin counter-rotating dashed ring.
-    rotate(counter, c) {
-      segmentedRing(color.copy(alpha = 0.55f), r * 0.66f, 2.dp.toPx(), segments = 12, gapDeg = 12f)
-    }
-    // Inner trapezoid segments (the classic reactor coil look).
-    rotate(spin * 0.5f, c) {
-      segmentedRing(color.copy(alpha = 0.35f + 0.4f * pulse), r * 0.52f, 10.dp.toPx(), segments = 10, gapDeg = 9f)
-    }
-    drawCircle(color.copy(alpha = 0.6f), radius = r * 0.43f, style = Stroke(1.5.dp.toPx()))
+    drawCircle(
+      color = HudColors.Outline,
+      radius = r * 0.56f,
+      style = Stroke(width = 1.2.dp.toPx()),
+    )
 
-    // Core.
     drawCircle(
       Brush.radialGradient(
-        listOf(Color.White, color.copy(alpha = 0.95f), color.copy(alpha = 0.15f), Color.Transparent),
-        center = c, radius = r * 0.38f * (0.85f + 0.15f * pulse),
+        listOf(HudColors.Surface, HudColors.BlushSoft, color.copy(alpha = 0.15f), Color.Transparent),
+        center = c,
+        radius = r * 0.44f,
       ),
-      radius = r * 0.38f,
+      radius = r * 0.44f,
     )
-    drawCircle(Color.White.copy(alpha = 0.85f * pulse), radius = r * 0.09f)
-  }
-}
-
-private fun DrawScope.segmentedRing(color: Color, radius: Float, stroke: Float, segments: Int, gapDeg: Float) {
-  val sweep = 360f / segments - gapDeg
-  val topLeft = Offset(center.x - radius, center.y - radius)
-  val sz = Size(radius * 2, radius * 2)
-  for (i in 0 until segments) {
-    drawArc(
-      color = color,
-      startAngle = i * (360f / segments),
-      sweepAngle = sweep,
-      useCenter = false,
-      topLeft = topLeft,
-      size = sz,
-      style = Stroke(stroke, cap = StrokeCap.Butt),
-    )
+    drawCircle(color.copy(alpha = 0.88f), radius = r * 0.14f, center = c)
   }
 }

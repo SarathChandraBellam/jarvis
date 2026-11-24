@@ -73,11 +73,17 @@ class MainActivity : ComponentActivity() {
   }
 
   private companion object {
-    val RUNTIME_PERMISSIONS = arrayOf(
-      Manifest.permission.READ_SMS,
-      Manifest.permission.READ_CALENDAR,
-      Manifest.permission.READ_CALL_LOG,
-      Manifest.permission.READ_CONTACTS,
-    )
+    val RUNTIME_PERMISSIONS = buildList {
+      add(Manifest.permission.READ_SMS)
+      add(Manifest.permission.READ_CALENDAR)
+      add(Manifest.permission.READ_CALL_LOG)
+      add(Manifest.permission.READ_CONTACTS)
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+      }
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        add(Manifest.permission.ACTIVITY_RECOGNITION)
+      }
+    }.toTypedArray()
   }
 }
