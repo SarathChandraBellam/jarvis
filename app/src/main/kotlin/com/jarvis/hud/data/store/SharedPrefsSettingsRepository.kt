@@ -8,6 +8,7 @@ import com.jarvis.hud.contracts.SettingsRepository
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.UserGender
 import java.security.KeyStore
 import java.util.Base64
 import javax.crypto.Cipher
@@ -66,6 +67,7 @@ class SharedPrefsSettingsRepository(
         .putInt(K_FAT_GOAL, clean.dailyFatGoalG)
         .putInt(K_STEP_GOAL, clean.dailyStepGoal)
         .putInt(K_SLEEP_GOAL, clean.sleepGoalMinutes)
+        .putString(K_GENDER, clean.userGender.name)
         .putBoolean(K_CYCLE_ENABLED, clean.cycleTrackingEnabled)
       if (clean.inboxCategoryName == null) editor.remove(K_INBOX_CAT) else editor.putString(K_INBOX_CAT, clean.inboxCategoryName)
 
@@ -101,7 +103,7 @@ class SharedPrefsSettingsRepository(
       onboardingDone = safeBool(K_ONBOARDED, prefs.contains(K_CALLSIGN)),
       monthlyBudget = safeFloat(K_BUDGET, d.monthlyBudget.toFloat()).toDouble().coerceAtLeast(0.0),
       selectedTabName = safeString(K_TAB)?.takeIf { n -> HudTab.entries.any { it.name == n } } ?: d.selectedTabName,
-      todayViewIndex = safeInt(K_TODAY_VIEW, d.todayViewIndex).coerceIn(0, 3),
+      todayViewIndex = safeInt(K_TODAY_VIEW, d.todayViewIndex).coerceIn(0, 4),
       subsViewIndex = safeInt(K_SUBS_VIEW, d.subsViewIndex).coerceIn(0, 2),
       inboxCategoryName = safeString(K_INBOX_CAT),
       inboxShowCompleted = safeBool(K_INBOX_COMPLETED, d.inboxShowCompleted),
@@ -115,6 +117,7 @@ class SharedPrefsSettingsRepository(
       dailyFatGoalG = safeInt(K_FAT_GOAL, d.dailyFatGoalG).coerceIn(20, 200),
       dailyStepGoal = safeInt(K_STEP_GOAL, d.dailyStepGoal).coerceIn(1000, 30000),
       sleepGoalMinutes = safeInt(K_SLEEP_GOAL, d.sleepGoalMinutes).coerceIn(240, 720),
+      userGender = safeString(K_GENDER)?.let { name -> UserGender.entries.firstOrNull { it.name == name } } ?: d.userGender,
       cycleTrackingEnabled = safeBool(K_CYCLE_ENABLED, d.cycleTrackingEnabled),
     )
   }
@@ -163,6 +166,7 @@ class SharedPrefsSettingsRepository(
     private const val K_FAT_GOAL = "daily_fat_goal"
     private const val K_STEP_GOAL = "daily_step_goal"
     private const val K_SLEEP_GOAL = "sleep_goal_min"
+    private const val K_GENDER = "user_gender"
     private const val K_CYCLE_ENABLED = "cycle_tracking_enabled"
   }
 }

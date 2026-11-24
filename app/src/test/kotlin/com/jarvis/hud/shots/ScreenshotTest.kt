@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performClick
 import com.jarvis.hud.model.HudTab
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.PermissionStatus
+import com.jarvis.hud.model.UserGender
 import com.jarvis.hud.ui.JarvisApp
 import com.jarvis.hud.ui.screens.PreviewFixtures
 import java.io.File
@@ -35,6 +36,7 @@ class ScreenshotTest {
   }
 
   @Test fun home() = shot("home", PreviewFixtures.state(HudTab.HUD))
+  @Test fun homeMale() = shot("home-male", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(userGender = UserGender.MALE, cycleTrackingEnabled = false)) })
   @Test fun homeFood() = shot("home-food", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 1)) })
   @Test fun homeCycle() = shot("home-cycle", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 2)) })
   @Test fun homeSleep() = shot("home-sleep", PreviewFixtures.state(HudTab.HUD).let { it.copy(settings = it.settings.copy(todayViewIndex = 3)) })

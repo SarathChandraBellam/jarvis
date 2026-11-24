@@ -27,6 +27,7 @@ import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.Priority
+import com.jarvis.hud.model.UserGender
 import com.jarvis.hud.ui.FakeContainer
 import com.jarvis.hud.ui.FakeSettingsRepo
 import com.jarvis.hud.ui.FakeStore
@@ -316,5 +317,33 @@ class AppFlowTest {
     rule.onNodeWithContentDescription("Refresh").performClick()
     rule.waitForIdle()
     assertEquals(before + 1, c.briefings.calls)
+  }
+
+  @Test fun maleProfileHidesPeriodTrackerAndFemaleShowsIt() {
+    val c = containerWith(settings = JarvisSettings())
+    launch(c)
+    rule.onNodeWithTag("onboardingName").performTextInput("Arjun")
+    rule.onNodeWithTag("onboardingGender-MALE").performScrollTo().performClick()
+    rule.onNodeWithTag("onboardingStart").performScrollTo().performClick()
+    rule.waitForIdle()
+
+    assertEquals(UserGender.MALE, c.settingsRepo.settings.value.userGender)
+    assertFalse(c.settingsRepo.settings.value.isPeriodTrackerActive)
+    rule.onAllNodesWithText("Cycle").assertCountEquals(0)
+    rule.onAllNodesWithText("Log period").assertCountEquals(0)
+    rule.onNodeWithText("Log sleep").assertIsDisplayed()
+
+    // Switch to Female in Settings -> Cycle & period tracker appear
+    rule.onNodeWithTag("openSettings").performClick()
+    rule.onNodeWithTag("settingsGender-FEMALE").performScrollTo().performClick()
+    rule.mainClock.advanceTimeBy(1_000)
+    rule.waitForIdle()
+    rule.onNodeWithContentDescription("Back").performClick()
+    rule.waitForIdle()
+
+    assertEquals(UserGender.FEMALE, c.settingsRepo.settings.value.userGender)
+    assertTrue(c.settingsRepo.settings.value.isPeriodTrackerActive)
+    rule.onNodeWithText("Cycle").assertIsDisplayed()
+    rule.onNodeWithText("Log period").assertIsDisplayed()
   }
 }

@@ -82,6 +82,7 @@ import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.model.OpenRouterModelInfo
+import com.jarvis.hud.model.UserGender
 import com.jarvis.hud.ui.components.EmptyLine
 import com.jarvis.hud.ui.components.JCard
 import com.jarvis.hud.ui.components.ListRow
@@ -166,6 +167,36 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
             colors = jarvisTextFieldColors(),
             modifier = Modifier.fillMaxWidth().testTag("callsignField"),
           )
+          Spacer(Modifier.size(12.dp))
+          Text("Gender", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+          Spacer(Modifier.size(6.dp))
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UserGender.entries.forEach { gender ->
+              FilterChip(
+                selected = draft.userGender == gender,
+                onClick = {
+                  draft = draft.copy(
+                    userGender = gender,
+                    cycleTrackingEnabled = gender == UserGender.FEMALE,
+                  )
+                },
+                label = { Text(gender.label) },
+                shape = CircleShape,
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = if (gender == UserGender.FEMALE) HudColors.BlushSoft else HudColors.SlateBlueSoft,
+                  selectedLabelColor = HudColors.Text,
+                ),
+                modifier = Modifier.testTag("settingsGender-${gender.name}"),
+              )
+            }
+          }
+          Spacer(Modifier.size(4.dp))
+          Text(
+            if (draft.userGender == UserGender.FEMALE) "Cycle & period tracker is shown in Today."
+            else "Cycle & period tracker is hidden for Male profile.",
+            style = MaterialTheme.typography.bodySmall,
+            color = HudColors.TextMuted,
+          )
         }
 
         SectionHeader("Proactive alerts & focus")
@@ -180,12 +211,14 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
 
         SectionHeader("Assistant")
         JCard(padding = 8.dp) {
-          SwitchRow(
-            "Cycle & period tracker",
-            "Show cycle phase context, period calendar & phase-aware insights",
-            Icons.Outlined.NotificationsActive,
-            draft.cycleTrackingEnabled,
-          ) { draft = draft.copy(cycleTrackingEnabled = it) }
+          if (draft.userGender == UserGender.FEMALE) {
+            SwitchRow(
+              "Cycle & period tracker",
+              "Show cycle phase context, period calendar & phase-aware insights",
+              Icons.Outlined.NotificationsActive,
+              draft.cycleTrackingEnabled,
+            ) { draft = draft.copy(cycleTrackingEnabled = it) }
+          }
           SwitchRow(
             "Voice replies",
             "Read briefings and answers out loud",

@@ -192,7 +192,8 @@ class JarvisViewModel(
   }
 
   override fun onSelectTodayView(index: Int) {
-    val clamped = index.coerceIn(0, 4)
+    val maxIdx = if (settings.isPeriodTrackerActive) 4 else 3
+    val clamped = index.coerceIn(0, maxIdx)
     val cur = settings
     if (cur.todayViewIndex != clamped) onUpdateSettings(cur.copy(todayViewIndex = clamped))
   }
@@ -537,14 +538,30 @@ class JarvisViewModel(
 
   override fun onUpdateSettings(settings: JarvisSettings) {
     val previous = this.settings
-    pendingSettings = settings
+    val adjusted = if (previous.isPeriodTrackerActive != settings.isPeriodTrackerActive &&
+      settings.todayViewIndex == previous.todayViewIndex
+    ) {
+      val remapped = if (settings.isPeriodTrackerActive) {
+        if (settings.todayViewIndex >= 2) settings.todayViewIndex + 1 else settings.todayViewIndex
+      } else {
+        when {
+          settings.todayViewIndex == 2 -> 0
+          settings.todayViewIndex > 2 -> settings.todayViewIndex - 1
+          else -> settings.todayViewIndex
+        }
+      }
+      settings.copy(todayViewIndex = remapped.coerceIn(0, if (settings.isPeriodTrackerActive) 4 else 3))
+    } else {
+      settings
+    }
+    pendingSettings = adjusted
     viewModelScope.launch {
-      val ok = safely { c.settingsRepo.update(settings) }
-      if (pendingSettings === settings) pendingSettings = null
+      val ok = safely { c.settingsRepo.update(adjusted) }
+      if (pendingSettings === adjusted) pendingSettings = null
       if (!ok) {
         _uiState.update { it.copy(settings = c.settingsRepo.settings.value) }
-      } else if (previous.enabledSources != settings.enabledSources ||
-        (!previous.onboardingDone && settings.onboardingDone)
+      } else if (previous.enabledSources != adjusted.enabledSources ||
+        (!previous.onboardingDone && adjusted.onboardingDone)
       ) {
         restartScan()
       }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.UserGender
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -61,6 +62,7 @@ class SettingsPersistenceTest {
       dailyCalorieGoal = 2100,
       dailyStepGoal = 10000,
       sleepGoalMinutes = 450,
+      userGender = UserGender.MALE,
       cycleTrackingEnabled = false,
     )
     SharedPrefsSettingsRepository(ctx, cipher).update(edited)

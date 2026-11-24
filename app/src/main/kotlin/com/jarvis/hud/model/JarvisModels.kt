@@ -83,6 +83,11 @@ data class PlannerReminder(
   val notifyProactively: Boolean = true,
 )
 
+enum class UserGender(val label: String) {
+  FEMALE("Female"),
+  MALE("Male"),
+}
+
 enum class ProactiveKind(val label: String) {
   RENEWAL("Renewal"),
   BILL("Bill due"),
@@ -339,8 +344,13 @@ data class JarvisSettings(
   val dailyFatGoalG: Int = 60,
   val dailyStepGoal: Int = 8000,
   val sleepGoalMinutes: Int = 480,
+  val userGender: UserGender = UserGender.FEMALE,
   val cycleTrackingEnabled: Boolean = true,
-)
+) {
+  /** Period & cycle tracking is active only for Female profiles with cycle tracking enabled. */
+  val isPeriodTrackerActive: Boolean
+    get() = userGender == UserGender.FEMALE && cycleTrackingEnabled
+}
 
 data class ConnectionTestResult(
   val success: Boolean,

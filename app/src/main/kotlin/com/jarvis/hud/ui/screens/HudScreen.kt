@@ -171,10 +171,11 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
   val dayWorkouts = remember(state.workouts, selectedDateKey) { state.workouts.filter { it.dateKey == selectedDateKey } }
   val daySleep = remember(state.sleepLogs, selectedDateKey) { state.sleepLogs.firstOrNull { it.dateKey == selectedDateKey } }
   val daySteps = state.stepsByDate[selectedDateKey] ?: 0
+  val showCycle = state.settings.isPeriodTrackerActive
   val cycleSummary = remember(state.cycleState, todayDate) { CycleSummary.from(state.cycleState, todayDate) }
 
-  val subTabs = remember(state.settings.cycleTrackingEnabled) {
-    if (state.settings.cycleTrackingEnabled) listOf("Overview", "Food", "Cycle", "Sleep", "Plan")
+  val subTabs = remember(showCycle) {
+    if (showCycle) listOf("Overview", "Food", "Cycle", "Sleep", "Plan")
     else listOf("Overview", "Food", "Sleep", "Plan")
   }
   val rawIdx = state.settings.todayViewIndex.coerceIn(0, subTabs.lastIndex)
@@ -272,7 +273,7 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
             val pills = (0..6).map { offset ->
               val d = weekStart.plusDays(offset.toLong())
               val key = d.toString()
-              val hasMark = key in renewalDates || key in reminderDates || d in cycleSummary.periodDaysInMonth
+              val hasMark = key in renewalDates || key in reminderDates || (showCycle && d in cycleSummary.periodDaysInMonth)
               DayPillItem(
                 letter = d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.ENGLISH),
                 dayNumber = d.dayOfMonth.toString(),
@@ -281,19 +282,19 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
                 onClick = { selectedDayOffset = java.time.temporal.ChronoUnit.DAYS.between(todayDate, d).toInt() },
               )
             }
-            val eyebrow = if (state.settings.cycleTrackingEnabled && cycleSummary.hasData) {
+            val eyebrow = if (showCycle && cycleSummary.hasData) {
               "${cycleSummary.phase.label} · Day ${cycleSummary.cycleDay}"
             } else if (upcomingSubs.isNotEmpty()) {
               "${upcomingSubs.size} renewal${if (upcomingSubs.size == 1) "" else "s"} this week"
             } else {
               "Personal companion"
             }
-            val rightHeadline = if (state.settings.cycleTrackingEnabled && cycleSummary.daysToNextPeriod != null) {
+            val rightHeadline = if (showCycle && cycleSummary.daysToNextPeriod != null) {
               "${cycleSummary.daysToNextPeriod} days"
             } else {
               rupees(activeSubs.sumOf { it.monthlyEquivalent })
             }
-            val rightSub = if (state.settings.cycleTrackingEnabled && cycleSummary.daysToNextPeriod != null) {
+            val rightSub = if (showCycle && cycleSummary.daysToNextPeriod != null) {
               "to period"
             } else {
               "monthly subs"
@@ -330,7 +331,7 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
             val sleepScore = daySleep?.qualityScore ?: state.sleepLogs.firstOrNull()?.qualityScore ?: 78
             val stepPct = ((daySteps.toFloat() / state.settings.dailyStepGoal.coerceAtLeast(1000)) * 100f).roundToInt().coerceIn(10, 100)
             val renewalScore = (100 - upcomingSubs.size * 15 - billsDue * 12).coerceIn(25, 100)
-            val guidance = if (state.settings.cycleTrackingEnabled && cycleSummary.hasData) {
+            val guidance = if (showCycle && cycleSummary.hasData) {
               "${cycleSummary.phase.label}: ${cycleSummary.phase.energyTip}"
             } else if (urgent.isNotEmpty()) {
               "Take it steady today. ${urgent.size} priority item${if (urgent.size == 1) "" else "s"} below."
@@ -361,7 +362,7 @@ fun HudScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
               QuickTile("Add activity", Icons.Outlined.DirectionsRun, HudColors.Sand, HudColors.SandSoft, Modifier.weight(1f)) {
                 activeModal = TodayModal.WORKOUT
               }
-              if (state.settings.cycleTrackingEnabled) {
+              if (showCycle) {
                 QuickTile("Log period", Icons.Outlined.Spa, HudColors.SlateBlue, HudColors.SlateBlueSoft, Modifier.weight(1f)) {
                   actions.onTogglePeriodDay(selectedDateKey)
                 }

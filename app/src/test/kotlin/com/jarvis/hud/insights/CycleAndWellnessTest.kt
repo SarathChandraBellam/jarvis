@@ -9,6 +9,7 @@ import com.jarvis.hud.model.MealLog
 import com.jarvis.hud.model.ProactiveKind
 import com.jarvis.hud.model.SleepLog
 import com.jarvis.hud.model.TimerMode
+import com.jarvis.hud.model.UserGender
 import com.jarvis.hud.model.WorkoutLog
 import java.io.File
 import java.time.LocalDate
@@ -116,6 +117,22 @@ class CycleAndWellnessTest {
       zone = zone,
     )
     assertTrue(alertsDisabled.none { it.kind == ProactiveKind.CYCLE })
+
+    // Also suppressed when userGender == MALE even if cycleTrackingEnabled = true
+    val alertsMale = ProactivePlanner.buildAlerts(
+      subscriptions = emptyList(),
+      items = emptyList(),
+      reminders = emptyList(),
+      recentCalls = emptyList(),
+      appUsage = emptyList(),
+      briefing = null,
+      settings = JarvisSettings(userGender = UserGender.MALE, cycleTrackingEnabled = true, morningBriefingHour = 12),
+      dismissedKeys = emptySet(),
+      cycleState = state,
+      now = now,
+      zone = zone,
+    )
+    assertTrue(alertsMale.none { it.kind == ProactiveKind.CYCLE })
 
     // Also suppressed when > 2 days away
     val earlyNow = ZonedDateTime.of(2026, 11, 15, 9, 0, 0, 0, zone).toInstant().toEpochMilli()

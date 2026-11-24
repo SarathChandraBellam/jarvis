@@ -170,7 +170,7 @@ object ProactivePlanner {
       )
     }
 
-    if (settings.cycleTrackingEnabled) {
+    if (settings.isPeriodTrackerActive) {
       val cyc = CycleSummary.from(cycleState, today)
       val daysTo = cyc.daysToNextPeriod
       if (cyc.hasData && daysTo != null && daysTo in 0..2) {
