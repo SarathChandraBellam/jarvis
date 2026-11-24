@@ -36,8 +36,9 @@ import androidx.compose.ui.unit.dp
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.theme.JarvisType
 
-/** Bottom sheet with everything Jarvis knows about one item, plus actions. */
+/** Bottom sheet with everything Jarvis knows about one item, plus calm actions. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemDetailSheet(
@@ -53,7 +54,7 @@ fun ItemDetailSheet(
     containerColor = HudColors.SurfaceHigh,
     modifier = Modifier.testTag("itemSheet"),
   ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 18.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         IconBadge(item.category.icon(), item.category.accent(), size = 44.dp)
         Spacer(Modifier.width(12.dp))
@@ -75,7 +76,7 @@ fun ItemDetailSheet(
         }
       }
       Spacer(Modifier.height(16.dp))
-      Text(item.title, style = MaterialTheme.typography.headlineSmall, color = HudColors.Text)
+      Text(item.title, style = JarvisType.TitleSerif, color = HudColors.Text)
       if (item.summary.isNotBlank()) {
         Spacer(Modifier.height(8.dp))
         Text(item.summary, style = MaterialTheme.typography.bodyLarge, color = HudColors.TextDim)
@@ -85,13 +86,12 @@ fun ItemDetailSheet(
       Spacer(Modifier.height(8.dp))
       item.amount?.let {
         DetailRow("Amount", (if (item.isCredit) "+" else "−") + HudFormat.money(it, item.currency),
-          if (item.isCredit) HudColors.Green else HudColors.Text)
+          if (item.isCredit) HudColors.Mint else HudColors.Text)
       }
       item.merchant?.let { DetailRow("Merchant", it) }
       item.dueDate?.let { DetailRow("Due", it, HudColors.Amber) }
       DetailRow("Priority", item.priority.displayLabel(), item.priority.color())
       DetailRow("Source", item.source.label)
-      // What identifies a payment: shown so you can see how it was read and why two alerts were merged.
       item.sender?.let { DetailRow("From", it) }
       item.accountTail?.let { DetailRow("Account", "··$it") }
       item.reference?.let { DetailRow("Reference", it) }
@@ -114,7 +114,7 @@ fun ItemDetailSheet(
           Button(
             onClick = { onStatus(item.id, ItemStatus.DONE) },
             modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.buttonColors(containerColor = HudColors.Green, contentColor = HudColors.Background),
+            colors = ButtonDefaults.buttonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream),
           ) {
             Icon(Icons.Outlined.Check, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))

@@ -240,6 +240,7 @@ class AppFlowTest {
     launch(containerWith(item("b1", "Electricity bill"), spend))
     rule.onNodeWithTag("tab-FINANCE").performClick()
     // Overview: bill due soon and the payment in Recent.
+    rule.onNodeWithTag("screen-money").performScrollToNode(hasText("Due this week"))
     rule.onNodeWithText("Due this week").assertIsDisplayed()
     rule.onNodeWithTag("screen-money").performScrollToNode(hasText("Swiggy"))
     rule.onNodeWithText("Swiggy").assertIsDisplayed()

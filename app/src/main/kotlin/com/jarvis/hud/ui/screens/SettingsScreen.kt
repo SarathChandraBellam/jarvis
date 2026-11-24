@@ -13,18 +13,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -71,6 +69,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -89,19 +89,17 @@ import com.jarvis.hud.ui.components.Pill
 import com.jarvis.hud.ui.components.SectionHeader
 import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.theme.JarvisType
 import kotlinx.coroutines.delay
 
-/** How long after the last edit we persist. Toggles and typing both go through this. */
 private const val AUTOSAVE_DELAY_MS = 400L
 
 /**
- * Settings. Every change saves automatically (debounced), and anything still pending is saved
- * when the screen closes — there is no Save button to miss.
+ * Settings screen with editorial serif header, midnight bento cards, and debounced autosave.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: SnackbarHostState) {
-  // Initialized once per visit. Not keyed on state.settings, so a save landing mid-typing can't wipe keystrokes.
   var draft by remember { mutableStateOf(state.settings) }
   val saved = state.settings
   val dirty = draft != saved
@@ -119,7 +117,6 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
   }
   BackHandler(onBack = actions::onCloseSettings)
 
-  /** Persist now (used before actions that read the saved key/model). */
   fun flush() {
     if (draft != saved) actions.onUpdateSettings(draft)
   }
@@ -131,7 +128,7 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
       TopAppBar(
         title = {
           Column {
-            Text("Settings", style = MaterialTheme.typography.titleLarge)
+            Text("Settings", style = JarvisType.TitleSerif)
             SaveStatus(dirty = dirty, failed = dirty && state.lastError != null)
           }
         },
@@ -149,89 +146,89 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
     },
   ) { inner ->
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.TopCenter) {
-    Column(
-      Modifier
-        .widthIn(max = 720.dp)
-        .fillMaxSize()
-        .imePadding()
-        .verticalScroll(rememberScrollState())
-        .padding(horizontal = 16.dp)
-        .testTag("settings"),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-      SectionHeader("Profile")
-      JCard {
-        OutlinedTextField(
-          value = draft.userCallsign,
-          onValueChange = { draft = draft.copy(userCallsign = it) },
-          label = { Text("What should Jarvis call you?") },
-          placeholder = { Text("Sir") },
-          singleLine = true,
-          shape = MaterialTheme.shapes.medium,
-          colors = jarvisTextFieldColors(),
-          modifier = Modifier.fillMaxWidth().testTag("callsignField"),
-        )
-      }
+      Column(
+        Modifier
+          .widthIn(max = 720.dp)
+          .fillMaxSize()
+          .imePadding()
+          .verticalScroll(rememberScrollState())
+          .padding(horizontal = 18.dp)
+          .testTag("settings"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        SectionHeader("Profile")
+        JCard {
+          OutlinedTextField(
+            value = draft.userCallsign,
+            onValueChange = { draft = draft.copy(userCallsign = it) },
+            label = { Text("What should Jarvis call you?") },
+            placeholder = { Text("Sir") },
+            singleLine = true,
+            shape = MaterialTheme.shapes.medium,
+            colors = jarvisTextFieldColors(),
+            modifier = Modifier.fillMaxWidth().testTag("callsignField"),
+          )
+        }
 
-      SectionHeader("AI model")
-      AiCard(state, draft, onChange = { draft = it }, flush = ::flush, actions = actions)
+        SectionHeader("AI model")
+        AiCard(state, draft, onChange = { draft = it }, flush = ::flush, actions = actions)
 
-      SectionHeader("Assistant")
-      JCard(padding = 8.dp) {
-        SwitchRow(
-          "Voice replies",
-          "Read briefings and answers out loud",
-          Icons.Outlined.RecordVoiceOver,
-          draft.voiceEnabled,
-        ) { draft = draft.copy(voiceEnabled = it) }
-        SwitchRow(
-          "Hide sensitive data",
-          "Mask OTPs, card and account numbers before anything is sent to the AI",
-          Icons.Outlined.Lock,
-          draft.redactSensitiveData,
-        ) { draft = draft.copy(redactSensitiveData = it) }
-      }
+        SectionHeader("Assistant")
+        JCard(padding = 8.dp) {
+          SwitchRow(
+            "Voice replies",
+            "Read briefings and answers out loud",
+            Icons.Outlined.RecordVoiceOver,
+            draft.voiceEnabled,
+          ) { draft = draft.copy(voiceEnabled = it) }
+          SwitchRow(
+            "Hide sensitive data",
+            "Mask OTPs, card and account numbers before anything is sent to the AI",
+            Icons.Outlined.Lock,
+            draft.redactSensitiveData,
+          ) { draft = draft.copy(redactSensitiveData = it) }
+        }
 
-      SectionHeader("Phone access")
-      JCard(padding = 12.dp) {
-        PermissionList(
-          state.permissions,
-          actions::onRequestRuntimePermissions,
-          actions::onOpenNotificationAccessSettings,
-          actions::onOpenUsageAccessSettings,
-        )
-      }
+        SectionHeader("Phone access")
+        JCard(padding = 12.dp) {
+          PermissionList(
+            state.permissions,
+            actions::onRequestRuntimePermissions,
+            actions::onOpenNotificationAccessSettings,
+            actions::onOpenUsageAccessSettings,
+          )
+        }
 
-      SectionHeader("Data sources")
-      JCard {
-        Text("Read from", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
-        Spacer(Modifier.height(8.dp))
-        SourceChips(draft.enabledSources, HudColors.Cyan) { draft = draft.copy(enabledSources = it) }
-        Spacer(Modifier.height(16.dp))
-        Text("Send to AI", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
-        Spacer(Modifier.height(8.dp))
-        SourceChips(draft.aiShareSources, HudColors.Amber) { draft = draft.copy(aiShareSources = it) }
-        Spacer(Modifier.height(10.dp))
+        SectionHeader("Data sources")
+        JCard {
+          Text("Read from", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+          Spacer(Modifier.size(8.dp))
+          SourceChips(draft.enabledSources, HudColors.Sky) { draft = draft.copy(enabledSources = it) }
+          Spacer(Modifier.size(16.dp))
+          Text("Send to AI", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+          Spacer(Modifier.size(8.dp))
+          SourceChips(draft.aiShareSources, HudColors.Amber) { draft = draft.copy(aiShareSources = it) }
+          Spacer(Modifier.size(10.dp))
+          Text(
+            "Sources not sent to the AI are still organized on your phone with built-in rules.",
+            style = MaterialTheme.typography.bodySmall,
+            color = HudColors.TextMuted,
+          )
+        }
+
+        SectionHeader("Money")
+        BudgetCard(draft.monthlyBudget) { draft = draft.copy(monthlyBudget = it) }
+
+        SectionHeader("Storage")
+        ClearCacheCard(actions::onClearAiCache)
+
         Text(
-          "Sources not sent to the AI are still organized on your phone with built-in rules.",
+          "Changes save automatically · Jarvis ${appVersion()}",
           style = MaterialTheme.typography.bodySmall,
           color = HudColors.TextMuted,
+          modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
         )
       }
-
-      SectionHeader("Money")
-      BudgetCard(draft.monthlyBudget) { draft = draft.copy(monthlyBudget = it) }
-
-      SectionHeader("Storage")
-      ClearCacheCard(actions::onClearAiCache)
-
-      Text(
-        "Changes save automatically · Jarvis ${appVersion()}",
-        style = MaterialTheme.typography.bodySmall,
-        color = HudColors.TextMuted,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-      )
-    }
     }
   }
 }
@@ -239,9 +236,9 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
 @Composable
 private fun SaveStatus(dirty: Boolean, failed: Boolean) {
   val (icon, text, color) = when {
-    failed -> Triple(Icons.Outlined.CloudOff, "Couldn't save", HudColors.Red)
+    failed -> Triple(Icons.Outlined.CloudOff, "Couldn't save", HudColors.Coral)
     dirty -> Triple(Icons.Outlined.CloudSync, "Saving…", HudColors.TextDim)
-    else -> Triple(Icons.Outlined.CloudDone, "All changes saved", HudColors.Green)
+    else -> Triple(Icons.Outlined.CloudDone, "All changes saved", HudColors.Mint)
   }
   Row(verticalAlignment = Alignment.CenterVertically) {
     Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
@@ -265,7 +262,7 @@ private fun AiCard(
       style = MaterialTheme.typography.bodySmall,
       color = HudColors.TextDim,
     )
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.size(12.dp))
     OutlinedTextField(
       value = draft.apiKey,
       onValueChange = { onChange(draft.copy(apiKey = it.trim())) },
@@ -284,7 +281,7 @@ private fun AiCard(
       colors = jarvisTextFieldColors(),
       modifier = Modifier.fillMaxWidth().testTag("apiKeyField"),
     )
-    Spacer(Modifier.height(4.dp))
+    Spacer(Modifier.size(4.dp))
     OutlinedTextField(
       value = draft.modelId,
       onValueChange = { onChange(draft.copy(modelId = it.trim())) },
@@ -294,7 +291,7 @@ private fun AiCard(
       colors = jarvisTextFieldColors(),
       modifier = Modifier.fillMaxWidth(),
     )
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.size(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedButton(
         onClick = { flush(); actions.onTestOpenRouterConnection() },
@@ -314,8 +311,8 @@ private fun AiCard(
       }
     }
     state.connectionTestResult?.let { r ->
-      Spacer(Modifier.height(10.dp))
-      val c = if (r.success) HudColors.Green else HudColors.Red
+      Spacer(Modifier.size(10.dp))
+      val c = if (r.success) HudColors.Mint else HudColors.Coral
       Row(
         Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(c.copy(alpha = 0.1f)).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -327,7 +324,7 @@ private fun AiCard(
       }
     }
     if (state.availableModels.isNotEmpty()) {
-      Spacer(Modifier.height(12.dp))
+      Spacer(Modifier.size(12.dp))
       ModelList(state.availableModels, draft.modelId) { onChange(draft.copy(modelId = it)) }
     }
   }
@@ -343,14 +340,15 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
       selected = freeOnly,
       onClick = { freeOnly = !freeOnly },
       label = { Text("Free only") },
+      shape = CircleShape,
       colors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = HudColors.Green.copy(alpha = 0.18f),
+        selectedContainerColor = HudColors.Mint.copy(alpha = 0.18f),
         selectedLabelColor = HudColors.Text,
         labelColor = HudColors.TextDim,
       ),
     )
   }
-  Spacer(Modifier.height(6.dp))
+  Spacer(Modifier.size(6.dp))
   LazyColumn(
     Modifier
       .fillMaxWidth()
@@ -365,7 +363,7 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
         Modifier
           .fillMaxWidth()
           .clip(MaterialTheme.shapes.small)
-          .background(if (sel) HudColors.CyanSoft else Color.Transparent)
+          .background(if (sel) HudColors.Cream.copy(alpha = 0.14f) else Color.Transparent)
           .clickable { onSelect(m.id) }
           .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -380,8 +378,8 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
             overflow = TextOverflow.Ellipsis,
           )
         }
-        if (m.isFree) Pill("Free", HudColors.Green, Modifier.padding(start = 8.dp))
-        if (sel) Icon(Icons.Outlined.CheckCircle, "Selected", tint = HudColors.Cyan, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+        if (m.isFree) Pill("Free", HudColors.Mint, Modifier.padding(start = 8.dp))
+        if (sel) Icon(Icons.Outlined.CheckCircle, "Selected", tint = HudColors.Cream, modifier = Modifier.padding(start = 8.dp).size(18.dp))
       }
     }
     if (shown.isEmpty()) item { EmptyLine("No models match", Modifier.padding(8.dp)) }
@@ -400,6 +398,7 @@ private fun SwitchRow(
     title = title,
     subtitle = sub,
     icon = icon,
+    tint = HudColors.Amber,
     onClick = { onChange(!checked) },
     modifier = Modifier.padding(horizontal = 8.dp),
     trailing = {
@@ -407,8 +406,8 @@ private fun SwitchRow(
         checked = checked,
         onCheckedChange = onChange,
         colors = SwitchDefaults.colors(
-          checkedThumbColor = HudColors.OnCyan,
-          checkedTrackColor = HudColors.Cyan,
+          checkedThumbColor = HudColors.OnCream,
+          checkedTrackColor = HudColors.Cream,
           uncheckedThumbColor = HudColors.TextDim,
           uncheckedTrackColor = HudColors.SurfaceHigh,
           uncheckedBorderColor = HudColors.Outline,
@@ -431,7 +430,7 @@ private fun SourceChips(selected: Set<DataSource>, accent: Color, onChange: (Set
         leadingIcon = if (on) {
           { Icon(Icons.Outlined.CheckCircle, null, Modifier.size(16.dp)) }
         } else null,
-        shape = MaterialTheme.shapes.small,
+        shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(
           containerColor = HudColors.Surface,
           labelColor = HudColors.TextDim,
@@ -458,7 +457,7 @@ private fun ClearCacheCard(onClear: () -> Unit) {
       title = "Clear organized data",
       subtitle = "Deletes the saved inbox and briefing, then re-scans your phone",
       icon = Icons.Outlined.DeleteOutline,
-      tint = HudColors.Red,
+      tint = HudColors.Coral,
       onClick = { confirm = true },
       modifier = Modifier.padding(horizontal = 8.dp),
     )
@@ -471,7 +470,7 @@ private fun ClearCacheCard(onClear: () -> Unit) {
       confirmButton = {
         TextButton(
           onClick = { confirm = false; onClear() },
-          colors = ButtonDefaults.textButtonColors(contentColor = HudColors.Red),
+          colors = ButtonDefaults.textButtonColors(contentColor = HudColors.Coral),
         ) { Text("Clear") }
       },
       dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },

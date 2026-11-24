@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.insights.SpendInsights
 import com.jarvis.hud.model.OrganizedItem
+import com.jarvis.hud.ui.theme.HudColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -46,13 +46,13 @@ internal fun dayLabel(d: LocalDate, today: LocalDate): String = when (d) {
 /** Day heading with that day's net outflow on the right. */
 @Composable
 internal fun DayHeader(date: LocalDate, today: LocalDate, spent: Double) {
-  Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp)) {
+  Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp, start = 4.dp, end = 4.dp)) {
     Text(dayLabel(date, today), style = Fin.Small.copy(fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f))
     if (spent > 0) Text(rupees(spent), style = Fin.Small)
   }
 }
 
-/** One payment: category dot, who, what kind and when, amount. Tap opens the details sheet. */
+/** One payment: circular monogram badge, who, what kind and when, amount. */
 @Composable
 internal fun TransactionRow(item: OrganizedItem, zone: ZoneId, onClick: () -> Unit, today: LocalDate? = null) {
   val credit = item.isCredit
@@ -61,36 +61,45 @@ internal fun TransactionRow(item: OrganizedItem, zone: ZoneId, onClick: () -> Un
   val category = SpendInsights.categorize(item)
   val kind = if (credit) SpendInsights.incomeKind(item).label else category.label
   val at = Instant.ofEpochMilli(item.timestamp).atZone(zone)
-  // In a list that is not grouped by day (Overview's "Recent"), say which day as well.
   val time = (today?.let { dayLabel(at.toLocalDate(), it) + ", " } ?: "") + CLOCK.format(at)
+  val badgeTint = if (credit) Fin.Positive else Fin.color(category)
+  val initial = name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "₹"
+
   Row(
     Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(10.dp))
+      .clip(RoundedCornerShape(14.dp))
       .clickable(role = Role.Button, onClick = onClick)
-      .padding(horizontal = 8.dp, vertical = 10.dp),
+      .padding(horizontal = 6.dp, vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    // Money in is a hollow green ring, so it never reads as a spending category's dot.
     Box(
-      Modifier.size(8.dp).clip(CircleShape).then(
-        if (credit) Modifier.border(1.5.dp, Fin.Positive, CircleShape) else Modifier.background(Fin.color(category)),
-      ),
-    )
+      Modifier
+        .size(36.dp)
+        .clip(CircleShape)
+        .background(badgeTint.copy(alpha = 0.14f))
+        .then(if (credit) Modifier.border(1.5.dp, Fin.Positive.copy(alpha = 0.6f), CircleShape) else Modifier),
+      contentAlignment = Alignment.Center,
+    ) {
+      Text(
+        if (credit) "+" else initial,
+        style = Fin.BodyStrong.copy(color = badgeTint),
+      )
+    }
     Spacer(Modifier.width(12.dp))
     Column(Modifier.weight(1f)) {
-      Text(name, style = Fin.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      Text("$kind · $time", style = Fin.Small, maxLines = 1)
+      Text(name, style = Fin.BodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      Text("$kind · $time", style = Fin.Small, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     Spacer(Modifier.width(12.dp))
     Text(
       (if (credit) "+" else "") + rupees(item.amount ?: 0.0),
-      style = Fin.Body.copy(color = if (credit) Fin.Positive else Fin.Ink),
+      style = Fin.BodyStrong.copy(color = if (credit) Fin.Positive else Fin.Ink),
     )
   }
 }
 
-/** Upcoming bill: a date block, who it's from, how soon, and "Mark paid". Tap opens the details sheet. */
+/** Upcoming bill: rounded date block, biller, due status, and "Mark paid" pill. */
 @Composable
 internal fun BillRow(item: OrganizedItem, today: LocalDate, onPaid: () -> Unit, onClick: () -> Unit) {
   val due = item.dueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -105,11 +114,20 @@ internal fun BillRow(item: OrganizedItem, today: LocalDate, onPaid: () -> Unit, 
   }
   val kind = item.title.substringBefore(" · ").trim()
   Row(
-    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onClick).padding(vertical = 10.dp),
+    Modifier
+      .fillMaxWidth()
+      .clip(RoundedCornerShape(14.dp))
+      .clickable(role = Role.Button, onClick = onClick)
+      .padding(horizontal = 4.dp, vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Column(
-      Modifier.width(48.dp).clip(RoundedCornerShape(10.dp)).background(Fin.Raised).padding(vertical = 6.dp),
+      Modifier
+        .width(48.dp)
+        .clip(RoundedCornerShape(12.dp))
+        .background(HudColors.SurfaceHigh)
+        .border(1.dp, Fin.Hairline, RoundedCornerShape(12.dp))
+        .padding(vertical = 6.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       Text(due?.dayOfMonth?.toString() ?: "—", style = Fin.Figure)
@@ -124,11 +142,15 @@ internal fun BillRow(item: OrganizedItem, today: LocalDate, onPaid: () -> Unit, 
     }
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Text(item.amount?.let(::rupees) ?: "", style = Fin.BodyStrong)
-      Text(
-        "Mark paid",
-        style = Fin.Small.copy(color = Fin.Link, fontWeight = FontWeight.Medium),
-        modifier = Modifier.clickable(role = Role.Button, onClick = onPaid).padding(vertical = 2.dp),
-      )
+      Box(
+        Modifier
+          .clip(CircleShape)
+          .background(HudColors.Cream.copy(alpha = 0.12f))
+          .clickable(role = Role.Button, onClick = onPaid)
+          .padding(horizontal = 10.dp, vertical = 4.dp),
+      ) {
+        Text("Mark paid", style = Fin.Tiny.copy(color = HudColors.Cream, fontWeight = FontWeight.Medium))
+      }
     }
   }
 }

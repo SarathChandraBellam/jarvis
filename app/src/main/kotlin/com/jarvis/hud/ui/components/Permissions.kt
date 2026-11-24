@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HourglassBottom
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Sms
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +23,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.model.PermissionStatus
 import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.theme.JarvisType
+import com.jarvis.hud.ui.viz.BentoCard
 
 private data class Access(
   val title: String,
@@ -44,10 +47,6 @@ private fun accessList(
   Access("Screen time", "Which apps you used today", Icons.Outlined.HourglassBottom, p.usageAccessGranted, onOpenUsageAccess),
 )
 
-/**
- * Lists each data source Jarvis can read with an "Allow" button for the missing ones.
- * [onlyMissing] hides rows that are already granted (used on Home).
- */
 @Composable
 fun PermissionList(
   permissions: PermissionStatus,
@@ -65,12 +64,16 @@ fun PermissionList(
         title = a.title,
         subtitle = a.why,
         icon = a.icon,
-        tint = if (a.granted) HudColors.Green else HudColors.Cyan,
+        tint = if (a.granted) HudColors.Mint else HudColors.Sky,
         trailing = {
           if (a.granted) {
-            Icon(Icons.Outlined.CheckCircle, "Allowed", tint = HudColors.Green, modifier = Modifier.size(22.dp))
+            Icon(Icons.Outlined.CheckCircle, "Allowed", tint = HudColors.Mint, modifier = Modifier.size(22.dp))
           } else {
-            FilledTonalButton(onClick = a.grant, contentPadding = PaddingValues(horizontal = 16.dp)) { Text("Allow") }
+            FilledTonalButton(
+              onClick = a.grant,
+              contentPadding = PaddingValues(horizontal = 16.dp),
+              colors = ButtonDefaults.filledTonalButtonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream),
+            ) { Text("Allow") }
           }
         },
       )
@@ -89,16 +92,16 @@ fun SetupCard(
 ) {
   val granted = permissions.grantedCount
   if (granted == 5) return
-  JCard(modifier) {
-    Text("Finish setting up", style = MaterialTheme.typography.titleMedium, color = HudColors.Text)
-    Spacer(Modifier.height(2.dp))
+  BentoCard(modifier = modifier, tint = HudColors.Sky) {
+    Text("Finish setting up", style = JarvisType.SectionSerif, color = HudColors.Text)
+    Spacer(Modifier.height(4.dp))
     Text(
       "$granted of 5 sources connected. Jarvis only reads data on this phone.",
       style = MaterialTheme.typography.bodySmall,
       color = HudColors.TextDim,
     )
     Spacer(Modifier.height(10.dp))
-    Meter(granted / 5f, HudColors.Cyan)
+    Meter(granted / 5f, HudColors.Sky)
     Spacer(Modifier.height(6.dp))
     PermissionList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess, onlyMissing = true)
   }

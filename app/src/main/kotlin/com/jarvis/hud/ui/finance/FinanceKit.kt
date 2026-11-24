@@ -1,6 +1,7 @@
 package com.jarvis.hud.ui.finance
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,67 +19,70 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jarvis.hud.insights.SpendCategory
 import com.jarvis.hud.ui.components.HudFormat
 import com.jarvis.hud.ui.theme.HudColors
-import androidx.compose.ui.text.font.FontFamily
+import com.jarvis.hud.ui.theme.JarvisType
 import java.util.Locale
 import kotlin.math.roundToLong
 
 /*
- * Visual vocabulary for the Money tab. Kept deliberately small: one sans face, three text
- * sizes, a surface + two hairline tones, and a categorical palette validated (CVD + contrast)
- * against the app background #050A14.
+ * Calm midnight-bento visual vocabulary for the Money tab.
+ * Editorial serif hero figures paired with tabular sans numerals and soft, low-glare accents.
  */
 internal object Fin {
   val Surface = HudColors.Background
-  val Raised = HudColors.Surface
+  val Raised = HudColors.SurfaceHigh
+  val Card = HudColors.Surface
   val Hairline = HudColors.OutlineSoft
-  val Track = HudColors.Surface
+  val Track = HudColors.SurfaceHigh
 
   val Ink = HudColors.Text
   val Ink2 = HudColors.TextDim
   val Ink3 = HudColors.TextMuted
 
-  /** Chart series colour for "this month" (validated with the category palette). */
-  val Accent = Color(0xFF3987E5)
-  /** Tappable text: the app's accent. */
-  val Link = HudColors.Cyan
-  val LastMonth = Color(0xFF55657A)
-  val Positive = HudColors.Green
+  val Accent = HudColors.Sky
+  val Link = HudColors.Cream
+  val LastMonth = Color(0xFF5D6E8C)
+  val Positive = HudColors.Mint
   val Warning = HudColors.Amber
-  val Critical = HudColors.Red
-  /** "Everything else" in the category bar. */
-  val Neutral = Color(0xFF3A4651)
-  /** People & transfers / uncategorised: a lighter grey so it never matches "everything else". */
-  val NeutralLight = Color(0xFF7C8B96)
+  val Critical = HudColors.Coral
+  val Neutral = Color(0xFF3E4B63)
+  val NeutralLight = Color(0xFF8393AA)
 
-  /** Sequential blue for the spend calendar, dim → bright (validated as an ordinal ramp on the surface). */
-  val Heat = listOf(Color(0xFF184F95), Color(0xFF256ABF), Color(0xFF3987E5), Color(0xFF6DA7EC), Color(0xFF9EC5F4))
+  /** Sequential amber-gold ramp for the calm spend calendar. */
+  val Heat = listOf(
+    Color(0xFF21375B),
+    Color(0xFF2F5386),
+    Color(0xFF4579B8),
+    Color(0xFF6BA3E5),
+    Color(0xFF9AC5F6),
+  )
 
-  /** Colour follows the category, never its rank: a filter must not repaint survivors. */
+  /** Calm categorical palette: colour stays bound to the category regardless of rank. */
   fun color(c: SpendCategory): Color = when (c) {
-    SpendCategory.FOOD -> Color(0xFF3987E5)
-    SpendCategory.SHOPPING -> Color(0xFFD95926)
-    SpendCategory.GROCERIES -> Color(0xFF199E70)
-    SpendCategory.BILLS -> Color(0xFFC98500)
-    SpendCategory.TRANSPORT -> Color(0xFFD55181)
-    SpendCategory.FUEL -> Color(0xFF0CA30C)
-    SpendCategory.ENTERTAINMENT -> Color(0xFF9085E9)
-    SpendCategory.HEALTH -> Color(0xFFE66767)
+    SpendCategory.FOOD -> HudColors.Amber
+    SpendCategory.SHOPPING -> HudColors.Coral
+    SpendCategory.GROCERIES -> HudColors.Mint
+    SpendCategory.BILLS -> HudColors.Peach
+    SpendCategory.TRANSPORT -> HudColors.Sky
+    SpendCategory.FUEL -> Color(0xFF7FD18C)
+    SpendCategory.ENTERTAINMENT -> HudColors.Lavender
+    SpendCategory.HEALTH -> Color(0xFFE589B4)
     SpendCategory.TRANSFERS, SpendCategory.OTHER -> NeutralLight
   }
 
-  val Hero = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 48.sp, letterSpacing = (-1).sp, color = Ink)
-  val Title = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Ink)
-  val Body = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp, color = Ink)
-  val BodyStrong = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Ink)
-  val Small = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 13.sp, color = Ink2)
-  val Tiny = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 11.sp, color = Ink3)
-  val Figure = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 20.sp, color = Ink)
+  val Hero = JarvisType.HeroSerif.copy(color = Ink)
+  val Title = JarvisType.SectionSerif.copy(color = Ink)
+  val Body = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp, color = Ink, fontFeatureSettings = "tnum")
+  val BodyStrong = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Ink, fontFeatureSettings = "tnum")
+  val Small = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 13.sp, color = Ink2, fontFeatureSettings = "tnum")
+  val Tiny = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 11.sp, color = Ink3, fontFeatureSettings = "tnum")
+  val Figure = JarvisType.MetricMedium.copy(color = Ink)
 }
 
 internal fun rupees(v: Double) = HudFormat.money(v.roundToLong().toDouble())
@@ -92,12 +96,18 @@ internal fun rupeesShort(v: Double): String = when {
 
 private fun trim(x: Double) = String.format(Locale.ENGLISH, "%.1f", x).removeSuffix(".0")
 
-/** Three-way switch at the top of the tab. */
+/** Pill-style three-way switch at the top of the Money tab. */
 @Composable
 internal fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
   Row(
-    modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(10.dp)).background(Fin.Track).padding(3.dp),
-    horizontalArrangement = Arrangement.spacedBy(3.dp),
+    modifier
+      .fillMaxWidth()
+      .height(44.dp)
+      .clip(RoundedCornerShape(22.dp))
+      .background(Fin.Card)
+      .border(1.dp, Fin.Hairline, RoundedCornerShape(22.dp))
+      .padding(4.dp),
+    horizontalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     options.forEachIndexed { i, label ->
       val on = i == selected
@@ -105,24 +115,34 @@ internal fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int)
         Modifier
           .weight(1f)
           .fillMaxHeight()
-          .clip(RoundedCornerShape(8.dp))
-          .background(if (on) Fin.Raised else Color.Transparent)
+          .clip(RoundedCornerShape(18.dp))
+          .background(if (on) HudColors.Cream else Color.Transparent)
           .clickable(role = Role.Tab) { onSelect(i) },
         contentAlignment = Alignment.Center,
       ) {
-        Text(label, style = Fin.Small.copy(color = if (on) Fin.Ink else Fin.Ink3, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal))
+        Text(
+          label,
+          style = Fin.Small.copy(
+            color = if (on) HudColors.OnCream else Fin.Ink2,
+            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+          ),
+        )
       }
     }
   }
 }
 
-/** Section heading with an optional action on the right. */
+/** Editorial section heading with an optional link action on the right. */
 @Composable
 internal fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? = null, onAction: (() -> Unit)? = null) {
-  Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
+  Row(modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
     Text(title, style = Fin.Title, modifier = Modifier.weight(1f))
     if (action != null && onAction != null) {
-      Text(action, style = Fin.Small.copy(color = Fin.Link), modifier = Modifier.clickable(role = Role.Button, onClick = onAction).padding(4.dp))
+      Text(
+        action,
+        style = Fin.Small.copy(color = HudColors.Amber, fontWeight = FontWeight.Medium),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onAction).padding(4.dp),
+      )
     }
   }
 }

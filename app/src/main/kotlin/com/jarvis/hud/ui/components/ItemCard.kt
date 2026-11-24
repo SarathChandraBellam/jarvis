@@ -11,15 +11,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,8 +49,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Card for one organized item. Swipe right = done, swipe left = dismiss; buttons do the same.
- * [onStatus] receives (itemId, newStatus).
+ * Calm bento card for one organized item. Swipe right = done, swipe left = dismiss.
  */
 @Composable
 fun ItemCard(
@@ -68,7 +66,7 @@ fun ItemCard(
 
   Box(modifier.fillMaxWidth()) {
     if (active && dragX != 0f) {
-      val revealColor = if (dragX > 0) HudColors.Green else HudColors.Red
+      val revealColor = if (dragX > 0) HudColors.Mint else HudColors.Coral
       Row(
         Modifier
           .matchParentSize()
@@ -110,7 +108,7 @@ fun ItemCard(
         )
         .then(if (onClick != null) Modifier.clickable(onClickLabel = "Open details", onClick = onClick) else Modifier)
         .testTag("item-${item.id}")
-        .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = if (compact) 14.dp else 6.dp),
+        .padding(start = 15.dp, end = 15.dp, top = 15.dp, bottom = if (compact) 15.dp else 7.dp),
     ) {
       Row(verticalAlignment = Alignment.Top) {
         IconBadge(item.category.icon(), if (active) accent else HudColors.TextMuted)
@@ -125,7 +123,7 @@ fun ItemCard(
             overflow = TextOverflow.Ellipsis,
           )
           if (item.summary.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.size(3.dp))
             Text(
               item.summary,
               style = MaterialTheme.typography.bodySmall,
@@ -134,7 +132,7 @@ fun ItemCard(
               overflow = TextOverflow.Ellipsis,
             )
           }
-          Spacer(Modifier.height(6.dp))
+          Spacer(Modifier.size(7.dp))
           Row(verticalAlignment = Alignment.CenterVertically) {
             if (item.priority == Priority.CRITICAL || item.priority == Priority.HIGH) {
               Pill(item.priority.displayLabel(), item.priority.color())
@@ -159,7 +157,7 @@ fun ItemCard(
             Text(
               (if (item.isCredit) "+" else "−") + HudFormat.money(amt, item.currency),
               style = MaterialTheme.typography.titleSmall,
-              color = if (item.isCredit) HudColors.Green else HudColors.Text,
+              color = if (item.isCredit) HudColors.Mint else HudColors.Text,
               maxLines = 1,
             )
             item.merchant?.let {
@@ -172,7 +170,7 @@ fun ItemCard(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
           if (active) {
             CardAction("Dismiss", Icons.Outlined.Close, HudColors.TextDim) { onStatus(item.id, ItemStatus.DISMISSED) }
-            CardAction("Done", Icons.Outlined.Check, HudColors.Green) { onStatus(item.id, ItemStatus.DONE) }
+            CardAction("Done", Icons.Outlined.Check, HudColors.Mint) { onStatus(item.id, ItemStatus.DONE) }
           } else {
             Text(
               if (item.status == ItemStatus.DONE) "Completed" else "Dismissed",
@@ -180,7 +178,7 @@ fun ItemCard(
               color = HudColors.TextMuted,
               modifier = Modifier.weight(1f).padding(start = 48.dp),
             )
-            CardAction("Restore", Icons.AutoMirrored.Outlined.Undo, HudColors.Cyan) { onStatus(item.id, ItemStatus.ACTIVE) }
+            CardAction("Restore", Icons.AutoMirrored.Outlined.Undo, HudColors.Cream) { onStatus(item.id, ItemStatus.ACTIVE) }
           }
         }
       }

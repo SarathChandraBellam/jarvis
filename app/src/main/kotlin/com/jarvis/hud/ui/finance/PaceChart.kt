@@ -1,6 +1,7 @@
 package com.jarvis.hud.ui.finance
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -10,8 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,9 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -33,6 +38,9 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.jarvis.hud.insights.SpendInsights
+import com.jarvis.hud.ui.theme.HudColors
+import com.jarvis.hud.ui.viz.BentoCard
+import com.jarvis.hud.ui.viz.smoothCubicPath
 import java.time.format.TextStyle as JTextStyle
 import java.util.Locale
 import kotlin.math.floor
@@ -40,9 +48,8 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 /**
- * Cumulative spend this month against last month, day by day — answers "am I spending faster
- * than usual?" at a glance. Two series on one axis, a key that doubles as the read-out, and a
- * scrub interaction (tap or drag) that moves the read-out to any day.
+ * Smooth cubic-Bezier cumulative spend area chart comparing this month against last month,
+ * inside a calm bento card with interactive day scrubbing.
  */
 @Composable
 internal fun PaceChart(s: SpendInsights, modifier: Modifier = Modifier) {
@@ -61,20 +68,24 @@ internal fun PaceChart(s: SpendInsights, modifier: Modifier = Modifier) {
   val thisVal = thisCum.getOrNull(idx)
   val lastVal = lastCum.getOrNull(idx) ?: 0.0
 
-  Column(modifier.fillMaxWidth()) {
-    // Key + read-out: which line is which, and the values at the scrubbed day.
+  BentoCard(modifier = modifier, padding = 16.dp) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      Text("Cumulative spend pace", style = Fin.BodyStrong, modifier = Modifier.weight(1f))
+      Text("Tap or drag to scrub", style = Fin.Tiny)
+    }
+    Spacer(Modifier.height(12.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
       KeyValue(Fin.Accent, "By ${idx + 1} $thisName", thisVal?.let(::rupees) ?: "—")
       KeyValue(Fin.LastMonth, "By ${idx + 1} $lastName", rupees(lastVal))
     }
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(16.dp))
 
     val measurer = rememberTextMeasurer()
     val maxY = niceCeil(maxOf(thisCum.lastOrNull() ?: 0.0, lastCum.lastOrNull() ?: 0.0, 1.0))
     Canvas(
       Modifier
         .fillMaxWidth()
-        .height(170.dp)
+        .height(176.dp)
         .semantics {
           contentDescription = "Cumulative spend: ${thisVal?.let(::rupees) ?: "nothing"} by day ${idx + 1} " +
             "this month versus ${rupees(lastVal)} last month"
@@ -88,45 +99,85 @@ internal fun PaceChart(s: SpendInsights, modifier: Modifier = Modifier) {
           }
         },
     ) {
-      val bottomPad = 22.dp.toPx()
-      val plotH = size.height - bottomPad
+      val topPad = 8.dp.toPx()
+      val bottomPad = 24.dp.toPx()
+      val plotH = (size.height - topPad - bottomPad).coerceAtLeast(1f)
       val w = size.width
       fun x(i: Int) = if (days <= 1) 0f else w * i / (days - 1).toFloat()
-      fun y(v: Double) = plotH - (v / maxY).toFloat() * plotH
+      fun y(v: Double) = topPad + plotH - (v / maxY).toFloat() * plotH
 
-      // Recessive grid: 3 solid hairlines with compact tick labels on the left.
+      // Subtle dashed baseline grid.
+      val gridDash = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
       for (g in 0..3) {
         val v = maxY * g / 3
         val gy = y(v)
-        drawLine(Fin.Hairline, Offset(0f, gy), Offset(w, gy), 1.dp.toPx())
+        drawLine(
+          color = Fin.Hairline,
+          start = Offset(0f, gy),
+          end = Offset(w, gy),
+          strokeWidth = 1.dp.toPx(),
+          pathEffect = if (g == 0) null else gridDash,
+        )
         if (g > 0) {
           drawText(measurer, rupeesShort(v), Offset(0f, gy + 3.dp.toPx()), Fin.Tiny)
         }
       }
 
-      fun path(values: List<Double>) = Path().apply {
-        values.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) }
-      }
-      val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-      drawPath(path(lastCum), Fin.LastMonth, style = stroke)
-      if (thisCum.isNotEmpty()) drawPath(path(thisCum), Fin.Accent, style = stroke)
+      val lastPts = lastCum.mapIndexed { i, v -> Offset(x(i), y(v)) }
+      val lastPath = smoothCubicPath(lastPts)
+      drawPath(
+        path = lastPath,
+        color = Fin.LastMonth,
+        style = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))),
+      )
 
-      // Scrub line + markers (8dp, with a surface ring so they sit on top of the lines).
+      if (thisCum.isNotEmpty()) {
+        val thisPts = thisCum.mapIndexed { i, v -> Offset(x(i), y(v)) }
+        val thisPath = smoothCubicPath(thisPts)
+        val areaPath = Path().apply {
+          addPath(thisPath)
+          lineTo(thisPts.last().x, topPad + plotH)
+          lineTo(thisPts.first().x, topPad + plotH)
+          close()
+        }
+        drawPath(
+          path = areaPath,
+          brush = Brush.verticalGradient(
+            listOf(Fin.Accent.copy(alpha = 0.28f), Fin.Accent.copy(alpha = 0.0f)),
+            startY = topPad,
+            endY = topPad + plotH,
+          ),
+        )
+        drawPath(
+          path = thisPath,
+          color = Fin.Accent,
+          style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
+      }
+
+      // Scrub indicator + glowing ring markers.
       val sx = x(idx)
-      drawLine(Fin.Ink3, Offset(sx, 0f), Offset(sx, plotH), 1.dp.toPx())
+      drawLine(
+        color = HudColors.Cream.copy(alpha = 0.45f),
+        start = Offset(sx, topPad),
+        end = Offset(sx, topPad + plotH),
+        strokeWidth = 1.2.dp.toPx(),
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
+      )
       fun marker(v: Double, c: Color) {
-        drawCircle(Fin.Surface, 6.dp.toPx(), Offset(sx, y(v)))
-        drawCircle(c, 4.dp.toPx(), Offset(sx, y(v)))
+        val pt = Offset(sx, y(v))
+        drawCircle(Fin.Card, 6.5.dp.toPx(), pt)
+        drawCircle(c, 4.dp.toPx(), pt)
       }
       marker(lastVal, Fin.LastMonth)
       thisVal?.let { marker(it, Fin.Accent) }
 
-      // X axis: first, middle, last day.
+      // X axis: start, middle, end of month.
       listOf(0, days / 2 - 1, days - 1).forEach { i ->
         val label = "${i + 1} $thisName"
         val m = measurer.measure(label, Fin.Tiny)
         val lx = (x(i) - m.size.width / 2f).coerceIn(0f, w - m.size.width)
-        drawText(m, topLeft = Offset(lx, plotH + 6.dp.toPx()))
+        drawText(m, topLeft = Offset(lx, topPad + plotH + 7.dp.toPx()))
       }
     }
   }
@@ -136,7 +187,7 @@ internal fun PaceChart(s: SpendInsights, modifier: Modifier = Modifier) {
 private fun KeyValue(color: Color, label: String, value: String) {
   Column {
     Row(verticalAlignment = Alignment.CenterVertically) {
-      Box(Modifier.width(14.dp).height(2.dp).background(color))
+      Box(Modifier.size(8.dp).clip(CircleShape).background(color))
       Spacer(Modifier.width(6.dp))
       Text(label, style = Fin.Small)
     }
