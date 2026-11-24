@@ -7,7 +7,10 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.jarvis.hud.contracts.JarvisContainer
 import com.jarvis.hud.contracts.isEnabled
+import com.jarvis.hud.insights.ProactivePlanner
+import com.jarvis.hud.insights.SubscriptionInsights
 import com.jarvis.hud.model.AppUsageStat
+import com.jarvis.hud.model.BillingCadence
 import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
 import com.jarvis.hud.model.ChatMessage
@@ -19,7 +22,10 @@ import com.jarvis.hud.model.JarvisActions
 import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.model.OrganizedItem
+import com.jarvis.hud.model.PlannerReminder
 import com.jarvis.hud.model.RawEvent
+import com.jarvis.hud.model.SubscriptionCategory
+import com.jarvis.hud.model.TrackedSubscription
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.coroutines.cancellation.CancellationException
@@ -32,27 +38,29 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Orchestrates the J.A.R.V.I.S. HUD purely through the [JarvisContainer] interfaces.
- *
- * Permission-related actions ([onRequestRuntimePermissions], [onOpenNotificationAccessSettings],
- * [onOpenUsageAccessSettings]) are intentional no-ops here: they need an Activity, so MainActivity
- * supplies its own [JarvisActions] (e.g. `object : JarvisActions by viewModel { override ... }`)
- * that launches the system permission flows and then calls [refreshPermissions] from onResume.
+ * Orchestrates Jarvis purely through [JarvisContainer] interfaces.
+ * Persists user selections, reminders, tracked subscriptions, and proactive alert states.
  */
 class JarvisViewModel(
   private val c: JarvisContainer,
   private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel(), JarvisActions {
 
+  private val initialSettings = c.settingsRepo.settings.value
+  private val initialTab = HudTab.entries.firstOrNull { it.name == initialSettings.selectedTabName } ?: HudTab.HUD
+
   private val _uiState = MutableStateFlow(
-    JarvisUiState(settings = c.settingsRepo.settings.value),
+    JarvisUiState(
+      selectedTab = initialTab,
+      settings = initialSettings,
+      reminders = c.plannerStore.reminders.value,
+    ),
   )
   val uiState: StateFlow<JarvisUiState> = _uiState.asStateFlow()
 
   private var scanJob: Job? = null
   private var idCounter = 0L
 
-  /** Settings handed to [onUpdateSettings] but not yet persisted; lets a follow-up action see them. */
   private var pendingSettings: JarvisSettings? = null
   private val settings: JarvisSettings get() = pendingSettings ?: c.settingsRepo.settings.value
 
@@ -61,28 +69,79 @@ class JarvisViewModel(
     refreshTelemetry()
 
     viewModelScope.launch {
-      c.settingsRepo.settings.collect { s -> _uiState.update { it.copy(settings = s) } }
+      c.settingsRepo.settings.collect { s ->
+        _uiState.update { it.copy(settings = s) }
+        recomputeDerived()
+      }
     }
     viewModelScope.launch {
-      c.store.items.collect { items -> _uiState.update { it.copy(items = visibleSorted(items)) } }
+      c.store.items.collect { items ->
+        _uiState.update { it.copy(items = visibleSorted(items)) }
+        recomputeDerived()
+      }
     }
+    viewModelScope.launch {
+      c.plannerStore.reminders.collect { rems ->
+        _uiState.update { it.copy(reminders = rems) }
+        recomputeDerived()
+      }
+    }
+    viewModelScope.launch { c.plannerStore.customSubscriptions.collect { recomputeDerived() } }
+    viewModelScope.launch { c.plannerStore.pausedSubscriptionIds.collect { recomputeDerived() } }
+    viewModelScope.launch { c.plannerStore.deletedSubscriptionIds.collect { recomputeDerived() } }
+    viewModelScope.launch { c.plannerStore.dismissedAlertKeys.collect { recomputeDerived() } }
     viewModelScope.launch {
       c.speaker.isSpeaking.collect { speaking -> _uiState.update { it.copy(isSpeaking = speaking) } }
     }
     viewModelScope.launch {
-      safely { c.store.loadBriefing(todayKey())?.let { b -> _uiState.update { it.copy(briefing = b) } } }
+      safely {
+        c.store.loadBriefing(todayKey())?.let { b ->
+          _uiState.update { it.copy(briefing = b) }
+          recomputeDerived()
+        }
+      }
     }
     viewModelScope.launch {
       c.notifications.events.collect { event -> safely { organizeLiveEvent(event) } }
     }
+    recomputeDerived()
     onScanAndOrganize()
+  }
+
+  private fun recomputeDerived() {
+    val st = _uiState.value
+    val now = clock()
+    val subs = SubscriptionInsights.build(
+      items = st.items,
+      customSubscriptions = c.plannerStore.customSubscriptions.value,
+      pausedIds = c.plannerStore.pausedSubscriptionIds.value,
+      deletedIds = c.plannerStore.deletedSubscriptionIds.value,
+      now = now,
+    ).all
+    val alerts = ProactivePlanner.buildAlerts(
+      subscriptions = subs,
+      items = st.items,
+      reminders = c.plannerStore.reminders.value,
+      recentCalls = st.recentCalls,
+      appUsage = st.appUsageStats,
+      briefing = st.briefing,
+      settings = st.settings,
+      dismissedKeys = c.plannerStore.dismissedAlertKeys.value,
+      now = now,
+    )
+    _uiState.update {
+      it.copy(
+        subscriptions = subs,
+        reminders = c.plannerStore.reminders.value,
+        proactiveAlerts = alerts,
+      )
+    }
   }
 
   // ---------------------------------------------------------------- refresh helpers
 
   private var permissionsLoaded = false
 
-  /** Re-reads permissions; if the user just granted something new, scans so the data shows up. */
   fun refreshPermissions() {
     runCatching { c.permissions.current() }
       .onSuccess { p ->
@@ -100,9 +159,26 @@ class JarvisViewModel(
       .onFailure { e -> setError(e) }
   }
 
-  // ---------------------------------------------------------------- navigation
+  // ---------------------------------------------------------------- navigation & persisted selections
 
-  override fun onSelectTab(tab: HudTab) = _uiState.update { it.copy(selectedTab = tab) }
+  override fun onSelectTab(tab: HudTab) {
+    _uiState.update { it.copy(selectedTab = tab) }
+    val cur = settings
+    if (cur.selectedTabName != tab.name) onUpdateSettings(cur.copy(selectedTabName = tab.name))
+  }
+
+  override fun onSelectSubsView(index: Int) {
+    val clamped = index.coerceIn(0, 2)
+    val cur = settings
+    if (cur.subsViewIndex != clamped) onUpdateSettings(cur.copy(subsViewIndex = clamped))
+  }
+
+  override fun onSelectInboxFilter(categoryName: String?, showCompleted: Boolean) {
+    val cur = settings
+    if (cur.inboxCategoryName != categoryName || cur.inboxShowCompleted != showCompleted) {
+      onUpdateSettings(cur.copy(inboxCategoryName = categoryName, inboxShowCompleted = showCompleted))
+    }
+  }
 
   override fun onOpenSettings() = _uiState.update { it.copy(showSettings = true) }
 
@@ -114,15 +190,80 @@ class JarvisViewModel(
 
   override fun onClearChat() = _uiState.update { it.copy(chatMessages = emptyList()) }
 
+  // ---------------------------------------------------------------- planner, subscriptions & proactive alerts
+
+  override fun onAddReminder(title: String, minutesOfDay: Int, dateKey: String) {
+    val clean = title.trim()
+    if (clean.isEmpty()) return
+    val rem = PlannerReminder(
+      id = nextId("rem"),
+      title = clean,
+      minutesOfDay = minutesOfDay.coerceIn(0, 1439),
+      dateKey = dateKey,
+    )
+    viewModelScope.launch { safely { c.plannerStore.addReminder(rem) } }
+  }
+
+  override fun onToggleReminder(reminderId: String) {
+    viewModelScope.launch { safely { c.plannerStore.toggleReminder(reminderId) } }
+  }
+
+  override fun onDeleteReminder(reminderId: String) {
+    viewModelScope.launch { safely { c.plannerStore.deleteReminder(reminderId) } }
+  }
+
+  override fun onAddSubscription(
+    name: String,
+    amount: Double,
+    cadence: BillingCadence,
+    category: SubscriptionCategory,
+    nextRenewalDate: String?,
+    isTrial: Boolean,
+  ) {
+    val clean = name.trim()
+    if (clean.isEmpty() || amount <= 0.0) return
+    val sub = TrackedSubscription(
+      id = nextId("sub"),
+      name = clean,
+      amount = amount,
+      cadence = cadence,
+      category = category,
+      nextRenewalDate = nextRenewalDate?.takeIf { it.isNotBlank() },
+      isTrial = isTrial,
+      isAutoDetected = false,
+      sourceNote = "Added manually",
+    )
+    viewModelScope.launch { safely { c.plannerStore.addSubscription(sub) } }
+  }
+
+  override fun onToggleSubscriptionPaused(subId: String) {
+    viewModelScope.launch { safely { c.plannerStore.toggleSubscriptionPaused(subId) } }
+  }
+
+  override fun onDeleteSubscription(subId: String) {
+    viewModelScope.launch { safely { c.plannerStore.deleteSubscription(subId) } }
+  }
+
+  override fun onDismissProactiveAlert(dedupKey: String) {
+    viewModelScope.launch { safely { c.plannerStore.dismissAlert(dedupKey) } }
+  }
+
+  override fun onSendTestProactiveAlert() {
+    val ok = c.notifier.sendTestNotification(settings.userCallsign)
+    if (!ok) {
+      _uiState.update {
+        it.copy(lastError = "Enable Notifications permission in Phone access to receive system alerts.")
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- scan pipeline
 
-  /** Starts a full scan unless one is already running (concurrent scans are ignored). */
   override fun onScanAndOrganize() {
     if (scanJob?.isActive == true) return
     scanJob = viewModelScope.launch { performScan() }
   }
 
-  /** Cancels any running scan, runs [before], then scans again. */
   private fun restartScan(before: suspend () -> Unit = {}) {
     val previous = scanJob
     scanJob = viewModelScope.launch {
@@ -159,7 +300,6 @@ class JarvisViewModel(
       val before = c.store.items.value.size
       if (organized.isNotEmpty()) c.store.upsert(organized)
       if (fresh.isNotEmpty()) c.store.markProcessed(fresh.map { it.contentHash })
-      // Duplicate channel reports of one payment merge in the store, so count what was actually added.
       val added = (c.store.items.value.size - before).coerceIn(0, organized.size)
 
       status(STATUS_BRIEFING)
@@ -183,6 +323,14 @@ class JarvisViewModel(
       _uiState.update {
         it.copy(briefing = briefing, syncStatusLine = syncedLine(added))
       }
+      recomputeDerived()
+
+      val newlyPosted = c.notifier.notifyAlerts(
+        alerts = _uiState.value.proactiveAlerts,
+        settings = s,
+        alreadyNotified = c.plannerStore.notifiedAlertKeys.value,
+      )
+      if (newlyPosted.isNotEmpty()) c.plannerStore.markNotified(newlyPosted)
     } catch (e: CancellationException) {
       throw e
     } catch (e: Throwable) {
@@ -205,7 +353,6 @@ class JarvisViewModel(
 
   // ---------------------------------------------------------------- voice
 
-  /** Explicit user toggle: speaks "headline. summary" or stops current speech. */
   override fun onToggleSpeakBriefing() {
     if (c.speaker.isSpeaking.value) {
       c.speaker.stop()
@@ -259,7 +406,6 @@ class JarvisViewModel(
       val ok = safely { c.settingsRepo.update(settings) }
       if (pendingSettings === settings) pendingSettings = null
       if (!ok) {
-        // Show what is really persisted, not the draft that failed to save.
         _uiState.update { it.copy(settings = c.settingsRepo.settings.value) }
       } else if (previous.enabledSources != settings.enabledSources ||
         (!previous.onboardingDone && settings.onboardingDone)
@@ -331,13 +477,8 @@ class JarvisViewModel(
 
   // ---------------------------------------------------------------- permissions (Activity-owned)
 
-  /** No-op: MainActivity overrides with an ActivityResult permission launcher. */
   override fun onRequestRuntimePermissions() = Unit
-
-  /** No-op: MainActivity overrides by launching the notification-listener settings screen. */
   override fun onOpenNotificationAccessSettings() = Unit
-
-  /** No-op: MainActivity overrides by launching the usage-access settings screen. */
   override fun onOpenUsageAccessSettings() = Unit
 
   override fun onCleared() {
@@ -352,7 +493,6 @@ class JarvisViewModel(
   private fun setError(e: Throwable) =
     _uiState.update { it.copy(lastError = e.message ?: e.toString()) }
 
-  /** Runs [block], routing any non-cancellation failure to lastError. Returns true on success. */
   private suspend fun safely(block: suspend () -> Unit): Boolean = try {
     block()
     true
@@ -387,7 +527,6 @@ class JarvisViewModel(
       else -> "Up to date · $newItems new items"
     }
 
-    /** ACTIVE first, then priority CRITICAL→LOW, then newest; DISMISSED items are hidden. */
     internal fun visibleSorted(items: List<OrganizedItem>): List<OrganizedItem> =
       items
         .filter { it.status != ItemStatus.DISMISSED }

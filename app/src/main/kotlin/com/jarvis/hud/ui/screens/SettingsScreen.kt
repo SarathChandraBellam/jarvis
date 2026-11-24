@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -94,9 +95,6 @@ import kotlinx.coroutines.delay
 
 private const val AUTOSAVE_DELAY_MS = 400L
 
-/**
- * Settings screen with editorial serif header, midnight bento cards, and debounced autosave.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: SnackbarHostState) {
@@ -170,6 +168,13 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
           )
         }
 
+        SectionHeader("Proactive alerts & focus")
+        ProactiveCard(
+          draft = draft,
+          onChange = { draft = it },
+          onSendTest = { flush(); actions.onSendTestProactiveAlert() },
+        )
+
         SectionHeader("AI model")
         AiCard(state, draft, onChange = { draft = it }, flush = ::flush, actions = actions)
 
@@ -196,6 +201,7 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
             actions::onRequestRuntimePermissions,
             actions::onOpenNotificationAccessSettings,
             actions::onOpenUsageAccessSettings,
+            includePostNotifications = true,
           )
         }
 
@@ -203,11 +209,11 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
         JCard {
           Text("Read from", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
           Spacer(Modifier.size(8.dp))
-          SourceChips(draft.enabledSources, HudColors.Sky) { draft = draft.copy(enabledSources = it) }
+          SourceChips(draft.enabledSources, HudColors.SlateBlue) { draft = draft.copy(enabledSources = it) }
           Spacer(Modifier.size(16.dp))
           Text("Send to AI", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
           Spacer(Modifier.size(8.dp))
-          SourceChips(draft.aiShareSources, HudColors.Amber) { draft = draft.copy(aiShareSources = it) }
+          SourceChips(draft.aiShareSources, HudColors.Sand) { draft = draft.copy(aiShareSources = it) }
           Spacer(Modifier.size(10.dp))
           Text(
             "Sources not sent to the AI are still organized on your phone with built-in rules.",
@@ -216,14 +222,11 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
           )
         }
 
-        SectionHeader("Money")
-        BudgetCard(draft.monthlyBudget) { draft = draft.copy(monthlyBudget = it) }
-
         SectionHeader("Storage")
         ClearCacheCard(actions::onClearAiCache)
 
         Text(
-          "Changes save automatically · Jarvis ${appVersion()}",
+          "Selections & reminders persist across restarts · Jarvis ${appVersion()}",
           style = MaterialTheme.typography.bodySmall,
           color = HudColors.TextMuted,
           modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
@@ -233,12 +236,67 @@ fun SettingsScreen(state: JarvisUiState, actions: JarvisActions, snackbar: Snack
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProactiveCard(
+  draft: JarvisSettings,
+  onChange: (JarvisSettings) -> Unit,
+  onSendTest: () -> Unit,
+) {
+  JCard {
+    SwitchRow(
+      "Proactive notifications",
+      "Alert me before subscription renewals, bills, reminders and deliveries",
+      Icons.Outlined.NotificationsActive,
+      draft.proactiveNotificationsEnabled,
+    ) { onChange(draft.copy(proactiveNotificationsEnabled = it)) }
+    Spacer(Modifier.size(10.dp))
+    Text("Renewal lead time", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+    Spacer(Modifier.size(6.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      listOf(1 to "1 day before", 3 to "3 days before", 7 to "7 days before").forEach { (days, label) ->
+        FilterChip(
+          selected = draft.renewalLeadDays == days,
+          onClick = { onChange(draft.copy(renewalLeadDays = days)) },
+          label = { Text(label) },
+          shape = CircleShape,
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = HudColors.BlushSoft,
+            selectedLabelColor = HudColors.Text,
+          ),
+        )
+      }
+    }
+    Spacer(Modifier.size(10.dp))
+    Text("Daily screen-time focus limit", style = MaterialTheme.typography.labelLarge, color = HudColors.TextDim)
+    Spacer(Modifier.size(6.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      listOf(60 to "1h", 120 to "2h", 180 to "3h", 240 to "4h").forEach { (mins, label) ->
+        FilterChip(
+          selected = draft.dailyFocusGoalMinutes == mins,
+          onClick = { onChange(draft.copy(dailyFocusGoalMinutes = mins)) },
+          label = { Text(label) },
+          shape = CircleShape,
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = HudColors.SageSoft,
+            selectedLabelColor = HudColors.Text,
+          ),
+        )
+      }
+    }
+    Spacer(Modifier.size(12.dp))
+    OutlinedButton(onClick = onSendTest, modifier = Modifier.fillMaxWidth()) {
+      Text("Send test notification")
+    }
+  }
+}
+
 @Composable
 private fun SaveStatus(dirty: Boolean, failed: Boolean) {
   val (icon, text, color) = when {
     failed -> Triple(Icons.Outlined.CloudOff, "Couldn't save", HudColors.Coral)
     dirty -> Triple(Icons.Outlined.CloudSync, "Saving…", HudColors.TextDim)
-    else -> Triple(Icons.Outlined.CloudDone, "All changes saved", HudColors.Mint)
+    else -> Triple(Icons.Outlined.CloudDone, "All changes saved", HudColors.Sage)
   }
   Row(verticalAlignment = Alignment.CenterVertically) {
     Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
@@ -312,9 +370,9 @@ private fun AiCard(
     }
     state.connectionTestResult?.let { r ->
       Spacer(Modifier.size(10.dp))
-      val c = if (r.success) HudColors.Mint else HudColors.Coral
+      val c = if (r.success) HudColors.Sage else HudColors.Coral
       Row(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(c.copy(alpha = 0.1f)).padding(10.dp),
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(c.copy(alpha = 0.12f)).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Icon(if (r.success) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline, null, tint = c, modifier = Modifier.size(18.dp))
@@ -342,7 +400,7 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
       label = { Text("Free only") },
       shape = CircleShape,
       colors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = HudColors.Mint.copy(alpha = 0.18f),
+        selectedContainerColor = HudColors.SageSoft,
         selectedLabelColor = HudColors.Text,
         labelColor = HudColors.TextDim,
       ),
@@ -363,7 +421,7 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
         Modifier
           .fillMaxWidth()
           .clip(MaterialTheme.shapes.small)
-          .background(if (sel) HudColors.Cream.copy(alpha = 0.14f) else Color.Transparent)
+          .background(if (sel) HudColors.SandSoft else Color.Transparent)
           .clickable { onSelect(m.id) }
           .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -378,7 +436,7 @@ private fun ModelList(models: List<OpenRouterModelInfo>, selectedId: String, onS
             overflow = TextOverflow.Ellipsis,
           )
         }
-        if (m.isFree) Pill("Free", HudColors.Mint, Modifier.padding(start = 8.dp))
+        if (m.isFree) Pill("Free", HudColors.Sage, Modifier.padding(start = 8.dp))
         if (sel) Icon(Icons.Outlined.CheckCircle, "Selected", tint = HudColors.Cream, modifier = Modifier.padding(start = 8.dp).size(18.dp))
       }
     }
@@ -398,9 +456,9 @@ private fun SwitchRow(
     title = title,
     subtitle = sub,
     icon = icon,
-    tint = HudColors.Amber,
+    tint = HudColors.Sand,
     onClick = { onChange(!checked) },
-    modifier = Modifier.padding(horizontal = 8.dp),
+    modifier = Modifier.padding(horizontal = 6.dp),
     trailing = {
       Switch(
         checked = checked,
@@ -434,7 +492,7 @@ private fun SourceChips(selected: Set<DataSource>, accent: Color, onChange: (Set
         colors = FilterChipDefaults.filterChipColors(
           containerColor = HudColors.Surface,
           labelColor = HudColors.TextDim,
-          selectedContainerColor = accent.copy(alpha = 0.18f),
+          selectedContainerColor = accent.copy(alpha = 0.14f),
           selectedLabelColor = HudColors.Text,
           selectedLeadingIconColor = accent,
         ),
@@ -442,7 +500,7 @@ private fun SourceChips(selected: Set<DataSource>, accent: Color, onChange: (Set
           enabled = true,
           selected = on,
           borderColor = HudColors.Outline,
-          selectedBorderColor = accent.copy(alpha = 0.6f),
+          selectedBorderColor = accent.copy(alpha = 0.5f),
         ),
       )
     }
@@ -474,31 +532,7 @@ private fun ClearCacheCard(onClear: () -> Unit) {
         ) { Text("Clear") }
       },
       dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
-      containerColor = HudColors.SurfaceHigh,
-    )
-  }
-}
-
-@Composable
-private fun BudgetCard(budget: Double, onChange: (Double) -> Unit) {
-  var text by remember { mutableStateOf(if (budget > 0) budget.toLong().toString() else "") }
-  JCard {
-    OutlinedTextField(
-      value = text,
-      onValueChange = { v ->
-        val digits = v.filter { it.isDigit() }.take(9)
-        text = digits
-        onChange(digits.toDoubleOrNull() ?: 0.0)
-      },
-      label = { Text("Monthly budget") },
-      placeholder = { Text("No budget") },
-      prefix = { Text("₹") },
-      singleLine = true,
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-      supportingText = { Text("Shows how much you have left this month on the Money tab") },
-      shape = MaterialTheme.shapes.medium,
-      colors = jarvisTextFieldColors(),
-      modifier = Modifier.fillMaxWidth().testTag("budgetField"),
+      containerColor = HudColors.Surface,
     )
   }
 }

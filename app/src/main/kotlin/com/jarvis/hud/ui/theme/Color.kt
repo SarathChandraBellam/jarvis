@@ -3,39 +3,56 @@ package com.jarvis.hud.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Calm midnight-bento palette inspired by personal software ("audience of one"):
- * deep midnight slate surfaces paired with warm cream, honey gold, sage mint,
- * soft coral, sky blue, and periwinkle accents.
+ * Warm calm cream & soft pastel palette inspired by @itspsneha's personal software aesthetic:
+ * warm paper cream canvas, crisp white cards, blush rose, warm sand, sage mint,
+ * soft lavender, and dusty slate blue — gentle and soothing, never harsh.
  */
 object HudColors {
-  val Background = Color(0xFF0B1120)
-  val Surface = Color(0xFF131C31)
-  val SurfaceHigh = Color(0xFF1A2540)
-  val SurfaceHighest = Color(0xFF223052)
-  val DockGlass = Color(0xEC162038)
+  val Background = Color(0xFFFAF7F2)
+  val Surface = Color(0xFFFFFFFF)
+  val SurfaceHigh = Color(0xFFF3EFE8)
+  val SurfaceHighest = Color(0xFFE9E2D6)
+  val DockGlass = Color(0xF7FFFFFF)
 
-  val Outline = Color(0xFF2B3B60)
-  val OutlineSoft = Color(0xFF1E2B48)
+  val Outline = Color(0xFFE3DBD0)
+  val OutlineSoft = Color(0xFFEEE8DE)
 
-  val Cream = Color(0xFFF4EDE2)
-  val OnCream = Color(0xFF121826)
+  // High-contrast warm espresso ink for primary buttons & active pills on cream paper.
+  val Cream = Color(0xFF23201C)
+  val OnCream = Color(0xFFFAF7F2)
 
-  val Cyan = Color(0xFF72B5F8)
-  val CyanSoft = Color(0x2672B5F8)
-  val OnCyan = Color(0xFF0A1424)
+  // Soft calm pastel accents & tinted card washes.
+  val Blush = Color(0xFFD66D8A)
+  val BlushSoft = Color(0xFFF9E9EE)
 
-  val Sky = Color(0xFF72B5F8)
-  val Amber = Color(0xFFF2B857)
-  val Gold = Amber
-  val Red = Color(0xFFF0837B)
-  val Coral = Red
-  val Green = Color(0xFF55D4A0)
-  val Mint = Green
-  val Violet = Color(0xFFA29BFE)
-  val Lavender = Violet
-  val Peach = Color(0xFFF3A683)
+  val Sand = Color(0xFFC28935)
+  val Amber = Sand
+  val Gold = Sand
+  val SandSoft = Color(0xFFF6ECD7)
 
-  val Text = Color(0xFFF2F4F8)
-  val TextDim = Color(0xFF9BA8C0)
-  val TextMuted = Color(0xFF64748D)
+  val Sage = Color(0xFF3E936B)
+  val Mint = Sage
+  val Green = Sage
+  val SageSoft = Color(0xFFE3F2EA)
+
+  val Lavender = Color(0xFF7B70C9)
+  val Violet = Lavender
+  val LavenderSoft = Color(0xFFEDEAF8)
+
+  val SlateBlue = Color(0xFF4C7CA6)
+  val SlateBlueSoft = Color(0xFFE6EFF7)
+  val Sky = SlateBlue
+  val Cyan = SlateBlue
+  val CyanSoft = SlateBlueSoft
+  val OnCyan = Color(0xFFFFFFFF)
+
+  val Peach = Color(0xFFD07B52)
+  val PeachSoft = Color(0xFFFBECE3)
+
+  val Coral = Color(0xFFCB5E59)
+  val Red = Coral
+
+  val Text = Color(0xFF23201C)
+  val TextDim = Color(0xFF6B645B)
+  val TextMuted = Color(0xFF9B9389)
 }

@@ -24,7 +24,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,11 +50,11 @@ import com.jarvis.hud.ui.components.jarvisTextFieldColors
 import com.jarvis.hud.ui.theme.HudColors
 import com.jarvis.hud.ui.theme.JarvisType
 
-/** Inbox tab: everything Jarvis organized, filterable by calm category pills. */
+/** Inbox tab: everything Jarvis organized, with persisted category & completion filters. */
 @Composable
 fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
-  var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
-  var showArchived by rememberSaveable { mutableStateOf(false) }
+  val selectedName = state.settings.inboxCategoryName
+  val showArchived = state.settings.inboxShowCompleted
   var query by rememberSaveable { mutableStateOf("") }
   val selected = selectedName?.let { n -> IntelCategory.entries.firstOrNull { it.name == n } }
 
@@ -95,15 +94,19 @@ fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Pa
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       item(key = "all") {
-        Chip("All · ${visibleBase.size}", selected == null, HudColors.Cream) { selectedName = null }
+        Chip("All · ${visibleBase.size}", selected == null, HudColors.Blush) {
+          actions.onSelectInboxFilter(null, showArchived)
+        }
       }
       items(IntelCategory.entries.filter { (counts[it] ?: 0) > 0 || it == selected }, key = { it.name }) { cat ->
         Chip("${cat.label} · ${counts[cat] ?: 0}", selected == cat, cat.accent(), cat) {
-          selectedName = if (selected == cat) null else cat.name
+          actions.onSelectInboxFilter(if (selected == cat) null else cat.name, showArchived)
         }
       }
       item(key = "archived") {
-        Chip("Show completed", showArchived, HudColors.TextDim) { showArchived = !showArchived }
+        Chip("Show completed", showArchived, HudColors.TextDim) {
+          actions.onSelectInboxFilter(selectedName, !showArchived)
+        }
       }
     }
     Refreshable(state.isSyncing, actions::onScanAndOrganize, Modifier.fillMaxSize()) {
@@ -122,7 +125,7 @@ fun IntelScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Pa
                 else -> "Nothing in ${selected.label}"
               },
               if (state.isSyncing) "Checking your messages and notifications…"
-              else "New bank alerts, bills, deliveries and messages will appear here.",
+              else "Subscriptions, bills, deliveries and messages will appear here.",
             ) {
               FilledTonalButton(
                 onClick = actions::onScanAndOrganize,
@@ -162,15 +165,15 @@ private fun Chip(label: String, selected: Boolean, accent: Color, category: Inte
       containerColor = HudColors.Surface,
       labelColor = HudColors.TextDim,
       iconColor = accent,
-      selectedContainerColor = accent.copy(alpha = 0.2f),
+      selectedContainerColor = accent.copy(alpha = 0.14f),
       selectedLabelColor = HudColors.Text,
       selectedLeadingIconColor = accent,
     ),
     border = FilterChipDefaults.filterChipBorder(
       enabled = true,
       selected = selected,
-      borderColor = HudColors.OutlineSoft,
-      selectedBorderColor = accent.copy(alpha = 0.6f),
+      borderColor = HudColors.Outline,
+      selectedBorderColor = accent.copy(alpha = 0.5f),
     ),
   )
 }

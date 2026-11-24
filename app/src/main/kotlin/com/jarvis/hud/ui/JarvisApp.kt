@@ -22,12 +22,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -78,7 +78,8 @@ import com.jarvis.hud.ui.theme.JarvisTheme
 import com.jarvis.hud.ui.theme.JarvisType
 
 /**
- * Root composable. Stateless: everything comes from [state], every event goes to [actions].
+ * Root composable. Warm cream paper canvas, editorial serif headers, floating frosted
+ * pill dock + detached Ask sparkle orb.
  */
 @Composable
 fun JarvisApp(state: JarvisUiState, actions: JarvisActions) {
@@ -107,7 +108,6 @@ fun JarvisApp(state: JarvisUiState, actions: JarvisActions) {
   }
 }
 
-/** Editorial header + floating pill dock with detached Ask orb (or side rail on wide screens). */
 @Composable
 private fun MainShell(state: JarvisUiState, actions: JarvisActions, snackbar: SnackbarHostState) {
   BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -142,6 +142,7 @@ private fun EditorialHeader(state: JarvisUiState, actions: JarvisActions) {
   val initial = state.settings.userCallsign.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "J"
   val title = when (state.selectedTab) {
     HudTab.HUD -> "${HudFormat.greeting(now)}, ${state.settings.userCallsign.ifBlank { "Sir" }}"
+    HudTab.FINANCE -> "Subscriptions"
     else -> state.selectedTab.label
   }
   val subtitle = if (state.selectedTab == HudTab.HUD) {
@@ -162,7 +163,7 @@ private fun EditorialHeader(state: JarvisUiState, actions: JarvisActions) {
       Text(
         subtitle,
         style = MaterialTheme.typography.labelMedium,
-        color = if (state.isSyncing) HudColors.Amber else HudColors.TextMuted,
+        color = if (state.isSyncing) HudColors.Blush else HudColors.TextMuted,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
@@ -189,10 +190,10 @@ private fun EditorialHeader(state: JarvisUiState, actions: JarvisActions) {
         .size(38.dp)
         .clip(CircleShape)
         .background(HudColors.Surface)
-        .border(1.dp, HudColors.OutlineSoft, CircleShape),
+        .border(1.dp, HudColors.Outline, CircleShape),
     ) {
       if (state.isSyncing) {
-        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = HudColors.Amber)
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = HudColors.Blush)
       } else {
         Icon(Icons.Outlined.Refresh, "Refresh", tint = HudColors.TextDim, modifier = Modifier.size(18.dp))
       }
@@ -200,25 +201,25 @@ private fun EditorialHeader(state: JarvisUiState, actions: JarvisActions) {
 
     Spacer(Modifier.width(10.dp))
 
-    // Personal monogram avatar pill (opens Settings), echoing Ojas ("Ko") and calm wellness ("S").
+    // Soft blush circular monogram badge (opens Settings), matching @itspsneha's "S" badge.
     Box(
       Modifier
         .size(40.dp)
         .clip(CircleShape)
-        .background(HudColors.SurfaceHigh)
-        .border(1.dp, HudColors.Outline, CircleShape)
+        .background(HudColors.BlushSoft)
+        .border(1.dp, HudColors.Blush.copy(alpha = 0.25f), CircleShape)
         .clickable(role = Role.Button, onClick = actions::onOpenSettings)
         .testTag("openSettings")
         .semantics { contentDescription = "Settings" },
       contentAlignment = Alignment.Center,
     ) {
-      Text(initial, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = HudColors.Cream)
+      Text(initial, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = HudColors.Blush)
     }
   }
 }
 
 /**
- * Floating frosted-pill bottom navigation bar (`Home`, `Money`, `Inbox`) paired with
+ * Floating frosted-white pill dock (`Today`, `Subs`, `Inbox`) paired with
  * a detached circular Ask sparkle orb (`✦`) on the right.
  */
 @Composable
@@ -232,7 +233,7 @@ private fun FloatingPillDock(state: JarvisUiState, onSelect: (HudTab) -> Unit) {
       .fillMaxWidth()
       .background(
         Brush.verticalGradient(
-          listOf(Color.Transparent, HudColors.Background.copy(alpha = 0.85f), HudColors.Background),
+          listOf(Color.Transparent, HudColors.Background.copy(alpha = 0.88f), HudColors.Background),
         ),
       )
       .navigationBarsPadding()
@@ -261,33 +262,32 @@ private fun FloatingPillDock(state: JarvisUiState, onSelect: (HudTab) -> Unit) {
               .weight(1f)
               .fillMaxHeight()
               .clip(RoundedCornerShape(25.dp))
-              .background(if (selected) HudColors.SurfaceHighest else Color.Transparent)
+              .background(if (selected) HudColors.SurfaceHigh else Color.Transparent)
               .clickable(role = Role.Tab) { onSelect(tab) }
               .testTag("tab-${tab.name}")
               .padding(horizontal = 6.dp, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
           ) {
-            TabIcon(tab, inboxCount, selectedTint = if (selected) HudColors.Cream else HudColors.TextMuted)
+            TabIcon(tab, inboxCount, selectedTint = if (selected) HudColors.Text else HudColors.TextMuted)
             Spacer(Modifier.height(2.dp))
             Text(
               tab.label,
               style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
               ),
-              color = if (selected) HudColors.Cream else HudColors.TextMuted,
+              color = if (selected) HudColors.Text else HudColors.TextMuted,
               maxLines = 1,
             )
           }
         }
       }
 
-      // Detached circular Ask orb (warm cream when active).
       Box(
         Modifier
           .size(60.dp)
           .clip(CircleShape)
-          .background(if (askSelected) HudColors.Cream else HudColors.SurfaceHigh)
+          .background(if (askSelected) HudColors.Cream else HudColors.Surface)
           .border(1.dp, if (askSelected) HudColors.Cream else HudColors.Outline, CircleShape)
           .clickable(role = Role.Tab) { onSelect(HudTab.ASK) }
           .testTag("tab-${HudTab.ASK.name}")
@@ -297,8 +297,8 @@ private fun FloatingPillDock(state: JarvisUiState, onSelect: (HudTab) -> Unit) {
         Icon(
           Icons.Outlined.AutoAwesome,
           contentDescription = HudTab.ASK.label,
-          tint = if (askSelected) HudColors.OnCream else HudColors.Cream,
-          modifier = Modifier.size(24.dp),
+          tint = if (askSelected) HudColors.OnCream else HudColors.Text,
+          modifier = Modifier.size(23.dp),
         )
       }
     }
@@ -323,7 +323,7 @@ private fun MainNavRail(state: JarvisUiState, onSelect: (HudTab) -> Unit) {
         modifier = Modifier.testTag("tab-${tab.name}"),
         colors = NavigationRailItemDefaults.colors(
           selectedIconColor = HudColors.OnCream,
-          selectedTextColor = HudColors.Cream,
+          selectedTextColor = HudColors.Text,
           indicatorColor = HudColors.Cream,
           unselectedIconColor = HudColors.TextMuted,
           unselectedTextColor = HudColors.TextMuted,
@@ -339,7 +339,7 @@ private fun TabIcon(tab: HudTab, inboxCount: Int, selectedTint: Color) {
   if (tab == HudTab.INTEL && inboxCount > 0) {
     BadgedBox(
       badge = {
-        Badge(containerColor = HudColors.Amber, contentColor = HudColors.OnCream) {
+        Badge(containerColor = HudColors.Blush, contentColor = Color.White) {
           Text(if (inboxCount > 99) "99+" else "$inboxCount")
         }
       },
@@ -352,34 +352,24 @@ private fun TabIcon(tab: HudTab, inboxCount: Int, selectedTint: Color) {
 }
 
 private fun HudTab.icon(): ImageVector = when (this) {
-  HudTab.HUD -> Icons.Outlined.Home
-  HudTab.FINANCE -> Icons.Outlined.AccountBalanceWallet
+  HudTab.HUD -> Icons.Outlined.WbSunny
+  HudTab.FINANCE -> Icons.Outlined.Autorenew
   HudTab.INTEL -> Icons.Outlined.Inbox
   HudTab.ASK -> Icons.Outlined.AutoAwesome
 }
 
-// ---------------------------------------------------------------- Previews
-
-@Preview(name = "Home", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0B1120)
+@Preview(name = "Today", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFFFAF7F2)
 @Composable
 private fun PreviewHome() = JarvisApp(PreviewFixtures.state(HudTab.HUD), PreviewFixtures.noOpActions)
 
-@Preview(name = "Money", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0B1120)
+@Preview(name = "Subs", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFFFAF7F2)
 @Composable
 private fun PreviewMoney() = JarvisApp(PreviewFixtures.state(HudTab.FINANCE), PreviewFixtures.noOpActions)
 
-@Preview(name = "Inbox", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0B1120)
+@Preview(name = "Inbox", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFFFAF7F2)
 @Composable
 private fun PreviewInbox() = JarvisApp(PreviewFixtures.state(HudTab.INTEL), PreviewFixtures.noOpActions)
 
-@Preview(name = "Ask", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0B1120)
+@Preview(name = "Ask", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFFFAF7F2)
 @Composable
 private fun PreviewAsk() = JarvisApp(PreviewFixtures.state(HudTab.ASK).copy(isAskingAi = true), PreviewFixtures.noOpActions)
-
-@Preview(name = "Tablet", widthDp = 900, heightDp = 600, showBackground = true, backgroundColor = 0xFF0B1120)
-@Composable
-private fun PreviewTablet() = JarvisApp(PreviewFixtures.state(HudTab.HUD), PreviewFixtures.noOpActions)
-
-@Preview(name = "Settings", widthDp = 400, heightDp = 880, showBackground = true, backgroundColor = 0xFF0B1120)
-@Composable
-private fun PreviewSettings() = JarvisApp(PreviewFixtures.state().copy(showSettings = true), PreviewFixtures.noOpActions)

@@ -51,7 +51,7 @@ fun ItemDetailSheet(
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = sheet,
-    containerColor = HudColors.SurfaceHigh,
+    containerColor = HudColors.Surface,
     modifier = Modifier.testTag("itemSheet"),
   ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 18.dp)) {

@@ -42,7 +42,6 @@ import com.jarvis.hud.ui.theme.HudColors
 import com.jarvis.hud.ui.theme.JarvisType
 import com.jarvis.hud.ui.viz.BentoCard
 
-/** First-run welcome: calm editorial intro + name + local data access. */
 @Composable
 fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
   var name by rememberSaveable { mutableStateOf(state.settings.userCallsign.takeIf { it != "Sir" } ?: "") }
@@ -67,7 +66,7 @@ fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
       Spacer(Modifier.height(4.dp))
       Text("Meet Jarvis", style = JarvisType.HeroSerif, color = HudColors.Text)
       Text(
-        "Your bank alerts, bills, deliveries, calendar and calls, sorted into one calm daily briefing. Everything is read on this phone.",
+        "Your subscriptions, bills, deliveries, day plan and proactive reminders in one calm place. Everything stays on this phone.",
         style = MaterialTheme.typography.bodyLarge,
         color = HudColors.TextDim,
         textAlign = TextAlign.Center,
@@ -92,7 +91,7 @@ fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
           modifier = Modifier.padding(start = 4.dp, top = 2.dp),
         )
         Text(
-          "Pick what Jarvis can read. You can change this any time in Settings.",
+          "Pick what Jarvis can read and notify you about. You can change this any time in Settings.",
           style = MaterialTheme.typography.bodySmall,
           color = HudColors.TextDim,
           modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
@@ -102,6 +101,7 @@ fun OnboardingScreen(state: JarvisUiState, actions: JarvisActions) {
           actions::onRequestRuntimePermissions,
           actions::onOpenNotificationAccessSettings,
           actions::onOpenUsageAccessSettings,
+          includePostNotifications = true,
         )
       }
       Spacer(Modifier.height(4.dp))

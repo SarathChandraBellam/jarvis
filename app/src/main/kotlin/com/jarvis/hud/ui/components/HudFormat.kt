@@ -105,20 +105,20 @@ fun IntelCategory.icon(): ImageVector = when (this) {
 }
 
 fun IntelCategory.accent(): Color = when (this) {
-  IntelCategory.FINANCE -> HudColors.Mint
-  IntelCategory.BILL -> HudColors.Amber
-  IntelCategory.DELIVERY -> HudColors.Sky
+  IntelCategory.FINANCE -> HudColors.Sage
+  IntelCategory.BILL -> HudColors.Sand
+  IntelCategory.DELIVERY -> HudColors.SlateBlue
   IntelCategory.TRAVEL -> HudColors.Lavender
   IntelCategory.ACTION -> HudColors.Peach
   IntelCategory.MESSAGE -> HudColors.TextDim
-  IntelCategory.SCHEDULE -> HudColors.Sky
+  IntelCategory.SCHEDULE -> HudColors.SlateBlue
   IntelCategory.SYSTEM -> HudColors.TextDim
 }
 
 fun Priority.color(): Color = when (this) {
-  Priority.CRITICAL -> HudColors.Red
-  Priority.HIGH -> HudColors.Amber
-  Priority.NORMAL -> HudColors.Cyan
+  Priority.CRITICAL -> HudColors.Blush
+  Priority.HIGH -> HudColors.Sand
+  Priority.NORMAL -> HudColors.SlateBlue
   Priority.LOW -> HudColors.TextMuted
 }
 

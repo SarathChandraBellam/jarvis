@@ -153,20 +153,20 @@ class AppFlowTest {
     rule.onNodeWithTag("screen-home").assertIsDisplayed()
   }
 
-  @Test fun togglesAndBudgetSave() {
+  @Test fun togglesAndProactiveSettingsSave() {
     val c = containerWith()
     launch(c)
     rule.onNodeWithTag("openSettings").performClick()
+    rule.onNodeWithTag("settings").performScrollToNode(hasText("Voice replies"))
     rule.onNodeWithText("Voice replies").performClick()
-    rule.onNodeWithTag("settings").performScrollToNode(hasTestTag("budgetField"))
-    rule.onNodeWithTag("budgetField").performTextInput("25000")
+    rule.onNodeWithTag("settings").performScrollToNode(hasText("1 day before"))
+    rule.onNodeWithText("1 day before").performClick()
     rule.mainClock.advanceTimeBy(1_000)
     rule.waitForIdle()
     assertFalse(c.settingsRepo.settings.value.voiceEnabled)
-    assertEquals(25_000.0, c.settingsRepo.settings.value.monthlyBudget, 0.0)
+    assertEquals(1, c.settingsRepo.settings.value.renewalLeadDays)
     rule.onNodeWithContentDescription("Back").performClick()
-    rule.onNodeWithTag("tab-FINANCE").performClick()
-    rule.onNodeWithTag("budgetCard").assertIsDisplayed()
+    rule.onNodeWithTag("screen-home").assertIsDisplayed()
   }
 
   // ------------------------------------------------------------------ inbox
@@ -229,33 +229,37 @@ class AppFlowTest {
 
   @Test fun homeShowsUrgentItemsAndSeeAllGoesToInbox() {
     launch(containerWith(item("b1", "Electricity bill")))
+    rule.onNodeWithTag("screen-home").performScrollToNode(hasText("Needs attention"))
     rule.onNodeWithText("Needs attention").assertIsDisplayed()
     rule.onNodeWithText("Electricity bill").assertIsDisplayed()
     rule.onNodeWithText("See all").performClick()
     rule.onNodeWithTag("inboxSearch").assertIsDisplayed()
   }
 
-  @Test fun moneyShowsBillsAndTransactions() {
-    val spend = item("f1", "Swiggy order", IntelCategory.FINANCE, Priority.NORMAL).copy(merchant = "Swiggy", dueDate = null)
-    launch(containerWith(item("b1", "Electricity bill"), spend))
+  @Test fun subsShowsSubscriptionsAndBills() {
+    val netflix = item("s1", "Netflix autopay", IntelCategory.FINANCE, Priority.NORMAL).copy(merchant = "Netflix", dueDate = null)
+    launch(containerWith(item("b1", "Electricity bill"), netflix))
     rule.onNodeWithTag("tab-FINANCE").performClick()
-    // Overview: bill due soon and the payment in Recent.
     rule.onNodeWithTag("screen-money").performScrollToNode(hasText("Due this week"))
     rule.onNodeWithText("Due this week").assertIsDisplayed()
-    rule.onNodeWithTag("screen-money").performScrollToNode(hasText("Swiggy"))
-    rule.onNodeWithText("Swiggy").assertIsDisplayed()
-    // Tapping the payment opens the shared details sheet.
-    rule.onNodeWithText("Swiggy").performClick()
-    rule.onNodeWithText("Swiggy order").assertIsDisplayed()
+    rule.onNodeWithText("Electricity bill").assertIsDisplayed()
   }
 
-  @Test fun moneyViewsSwitch() {
-    val spend = item("f1", "Swiggy order", IntelCategory.FINANCE, Priority.NORMAL).copy(merchant = "Swiggy", dueDate = null)
-    launch(containerWith(item("b1", "Electricity bill"), spend))
+  @Test fun subsViewsSwitchAndPersistSelection() {
+    val c = containerWith(
+      item("b1", "Electricity bill"),
+      item("s1", "Netflix autopay", IntelCategory.FINANCE, Priority.NORMAL).copy(merchant = "Netflix", dueDate = null),
+    )
+    launch(c)
     rule.onNodeWithTag("tab-FINANCE").performClick()
-    rule.onNodeWithText("Spending").performClick()
-    rule.onNodeWithText("Food & dining").assertIsDisplayed()
+    assertEquals("FINANCE", c.settingsRepo.settings.value.selectedTabName)
+    rule.onNodeWithText("Renewals").performClick()
+    rule.waitForIdle()
+    assertEquals(1, c.settingsRepo.settings.value.subsViewIndex)
+    rule.onNodeWithText("All tracked subscriptions").assertIsDisplayed()
     rule.onNodeWithText("Bills").performClick()
+    rule.waitForIdle()
+    assertEquals(2, c.settingsRepo.settings.value.subsViewIndex)
     rule.onNodeWithText("1 bill open").assertIsDisplayed()
   }
 
@@ -276,9 +280,9 @@ class AppFlowTest {
   @Test fun askSuggestionChipSendsImmediately() {
     launch(containerWith())
     rule.onNodeWithTag("tab-ASK").performClick()
-    rule.onNodeWithText("What did I spend today?").performClick()
+    rule.onNodeWithText("What subscriptions renew soon?").performClick()
     rule.waitForIdle()
-    rule.onNodeWithText("Reply to What did I spend today?").assertIsDisplayed()
+    rule.onNodeWithText("Reply to What subscriptions renew soon?").assertIsDisplayed()
   }
 
   @Test fun askWithoutKeyOffersSettings() {

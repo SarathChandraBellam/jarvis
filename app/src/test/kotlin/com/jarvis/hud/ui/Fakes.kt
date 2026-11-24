@@ -9,6 +9,8 @@ import com.jarvis.hud.contracts.NotificationFeed
 import com.jarvis.hud.contracts.OpenRouterClient
 import com.jarvis.hud.contracts.PermissionChecker
 import com.jarvis.hud.contracts.PhoneDataSource
+import com.jarvis.hud.contracts.PlannerStore
+import com.jarvis.hud.contracts.ProactiveNotifier
 import com.jarvis.hud.contracts.SettingsRepository
 import com.jarvis.hud.contracts.Speaker
 import com.jarvis.hud.model.AppUsageStat
@@ -25,11 +27,13 @@ import com.jarvis.hud.model.JarvisSettings
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
+import com.jarvis.hud.model.PlannerReminder
+import com.jarvis.hud.model.ProactiveAlert
 import com.jarvis.hud.model.RawEvent
+import com.jarvis.hud.model.TrackedSubscription
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 
 fun rawEvent(id: String, source: DataSource = DataSource.SMS, ts: Long = 1_000L) = RawEvent(
   id = id,
@@ -62,7 +66,7 @@ class FakeNotifications : NotificationFeed {
 }
 
 class FakePermissions : PermissionChecker {
-  var status = PermissionStatus(true, false, true, false, false)
+  var status = PermissionStatus(true, false, true, false, false, true)
   override fun current() = status
 }
 
@@ -86,7 +90,6 @@ class FakeOpenRouter : OpenRouterClient {
 open class FakeOrganizer : IntelOrganizer {
   var calls = 0
   val received = mutableListOf<RawEvent>()
-  /** When set, organize() suspends until completed (for concurrency tests). */
   var gate: CompletableDeferred<Unit>? = null
   override suspend fun organize(events: List<RawEvent>, settings: JarvisSettings): List<OrganizedItem> {
     calls++
@@ -153,6 +156,55 @@ class FakeStore : IntelStore {
   override suspend fun clear() { clears++; items.value = emptyList(); processed.clear(); briefing = null }
 }
 
+class FakePlannerStore : PlannerStore {
+  override val reminders = MutableStateFlow<List<PlannerReminder>>(emptyList())
+  override val customSubscriptions = MutableStateFlow<List<TrackedSubscription>>(emptyList())
+  override val pausedSubscriptionIds = MutableStateFlow<Set<String>>(emptySet())
+  override val deletedSubscriptionIds = MutableStateFlow<Set<String>>(emptySet())
+  override val dismissedAlertKeys = MutableStateFlow<Set<String>>(emptySet())
+  override val notifiedAlertKeys = MutableStateFlow<Set<String>>(emptySet())
+
+  override suspend fun addReminder(reminder: PlannerReminder) {
+    reminders.value = reminders.value + reminder
+  }
+  override suspend fun toggleReminder(id: String) {
+    reminders.value = reminders.value.map { if (it.id == id) it.copy(isDone = !it.isDone) else it }
+  }
+  override suspend fun deleteReminder(id: String) {
+    reminders.value = reminders.value.filterNot { it.id == id }
+  }
+  override suspend fun addSubscription(sub: TrackedSubscription) {
+    customSubscriptions.value = customSubscriptions.value + sub
+  }
+  override suspend fun toggleSubscriptionPaused(id: String) {
+    pausedSubscriptionIds.value = if (id in pausedSubscriptionIds.value) pausedSubscriptionIds.value - id else pausedSubscriptionIds.value + id
+  }
+  override suspend fun deleteSubscription(id: String) {
+    customSubscriptions.value = customSubscriptions.value.filterNot { it.id == id }
+    deletedSubscriptionIds.value = deletedSubscriptionIds.value + id
+  }
+  override suspend fun dismissAlert(dedupKey: String) {
+    dismissedAlertKeys.value = dismissedAlertKeys.value + dedupKey
+  }
+  override suspend fun markNotified(dedupKeys: Collection<String>) {
+    notifiedAlertKeys.value = notifiedAlertKeys.value + dedupKeys
+  }
+}
+
+class FakeNotifier : ProactiveNotifier {
+  val sent = mutableListOf<ProactiveAlert>()
+  var testCalls = 0
+  override fun notifyAlerts(alerts: List<ProactiveAlert>, settings: JarvisSettings, alreadyNotified: Set<String>): List<String> {
+    val fresh = alerts.filter { it.dedupKey !in alreadyNotified }
+    sent += fresh
+    return fresh.map { it.dedupKey }
+  }
+  override fun sendTestNotification(callsign: String): Boolean {
+    testCalls++
+    return true
+  }
+}
+
 class FakeSpeaker : Speaker {
   override val isSpeaking = MutableStateFlow(false)
   val spoken = mutableListOf<String>()
@@ -172,10 +224,11 @@ class FakeContainer(
   override val briefings: FakeBriefings = FakeBriefings(),
   override val assistant: FakeAssistant = FakeAssistant(),
   override val store: FakeStore = FakeStore(),
+  override val plannerStore: FakePlannerStore = FakePlannerStore(),
+  override val notifier: FakeNotifier = FakeNotifier(),
   override val speaker: FakeSpeaker = FakeSpeaker(),
 ) : JarvisContainer
 
-/** A container whose phone has no SMS or buffered notifications. */
 fun emptyContainer() = FakeContainer(
   phoneData = FakePhoneData().apply { sms = emptyList() },
   notifications = FakeNotifications().apply { buffered = emptyList() },

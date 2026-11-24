@@ -4,7 +4,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -13,27 +13,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val JarvisColorScheme = darkColorScheme(
+private val JarvisColorScheme = lightColorScheme(
   primary = HudColors.Cream,
   onPrimary = HudColors.OnCream,
-  primaryContainer = HudColors.CyanSoft,
-  onPrimaryContainer = HudColors.Sky,
-  secondary = HudColors.Amber,
-  onSecondary = HudColors.Background,
-  secondaryContainer = HudColors.SurfaceHighest,
+  primaryContainer = HudColors.BlushSoft,
+  onPrimaryContainer = HudColors.Blush,
+  secondary = HudColors.Sand,
+  onSecondary = HudColors.Surface,
+  secondaryContainer = HudColors.SandSoft,
   onSecondaryContainer = HudColors.Text,
-  tertiary = HudColors.Mint,
-  onTertiary = HudColors.Background,
+  tertiary = HudColors.Sage,
+  onTertiary = HudColors.Surface,
   error = HudColors.Coral,
-  onError = HudColors.Background,
+  onError = HudColors.Surface,
   background = HudColors.Background,
   onBackground = HudColors.Text,
   surface = HudColors.Background,
   onSurface = HudColors.Text,
   surfaceVariant = HudColors.SurfaceHigh,
   onSurfaceVariant = HudColors.TextDim,
-  surfaceContainerLowest = HudColors.Background,
-  surfaceContainerLow = HudColors.Surface,
+  surfaceContainerLowest = HudColors.Surface,
+  surfaceContainerLow = HudColors.Background,
   surfaceContainer = HudColors.Surface,
   surfaceContainerHigh = HudColors.SurfaceHigh,
   surfaceContainerHighest = HudColors.SurfaceHighest,
@@ -41,13 +41,13 @@ private val JarvisColorScheme = darkColorScheme(
   outlineVariant = HudColors.OutlineSoft,
   inverseSurface = HudColors.Cream,
   inverseOnSurface = HudColors.OnCream,
-  inversePrimary = HudColors.OnCream,
+  inversePrimary = HudColors.Blush,
 )
 
 private val Sans = FontFamily.SansSerif
 private val Serif = FontFamily.Serif
 
-/** Editorial display + tabular numeric roles used across bento cards and charts. */
+/** Editorial serif display + tabular numeric roles for calm personal software. */
 object JarvisType {
   val HeroSerif = TextStyle(
     fontFamily = Serif,

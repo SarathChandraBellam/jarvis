@@ -35,69 +35,61 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.jarvis.hud.insights.DayPart
 import com.jarvis.hud.insights.Share
-import com.jarvis.hud.insights.SpendCategory
-import com.jarvis.hud.insights.SpendInsights
+import com.jarvis.hud.model.OrganizedItem
+import com.jarvis.hud.model.SubscriptionCategory
+import com.jarvis.hud.model.TrackedSubscription
 import com.jarvis.hud.ui.theme.HudColors
 import com.jarvis.hud.ui.theme.JarvisType
-import com.jarvis.hud.ui.viz.BaselineRangeBar
 import com.jarvis.hud.ui.viz.BentoCard
 import java.time.DayOfWeek
 import java.time.LocalDate
-import kotlin.math.ceil
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Where the month's money went: a continuous multi-segment phase ring with centered editorial
- * readout + interactive category rows that filter the ledger below.
+ * Continuous pastel multi-segment phase ring for Subscriptions by category,
+ * modeled after @itspsneha's Cycle Ring with centered serif monthly burn readout.
  */
 @Composable
-internal fun CategoryBreakdown(
-  shares: List<Share<SpendCategory>>,
-  selected: SpendCategory?,
-  onSelect: (SpendCategory?) -> Unit,
+internal fun SubscriptionCategoryRing(
+  shares: List<Share<SubscriptionCategory>>,
+  selected: SubscriptionCategory?,
+  onSelect: (SubscriptionCategory?) -> Unit,
 ) {
   if (shares.isEmpty()) return
-  val top = shares.take(5)
-  val rest = shares.drop(5)
-  val restFraction = rest.sumOf { it.fraction.toDouble() }.toFloat()
-  val totalAmount = shares.sumOf { it.amount }
+  val totalMonthly = shares.sumOf { it.amount }
   val activeShare = shares.firstOrNull { it.key == selected }
 
-  val ringParts = top.map { Triple(it.key as SpendCategory?, it.fraction, Fin.color(it.key)) } +
-    if (restFraction > 0.01f) listOf(Triple(null, restFraction, Fin.Neutral)) else emptyList()
-
   BentoCard(padding = 18.dp) {
-    Box(
-      Modifier.fillMaxWidth().height(210.dp),
-      contentAlignment = Alignment.Center,
-    ) {
+    Box(Modifier.fillMaxWidth().height(210.dp), contentAlignment = Alignment.Center) {
       Canvas(
         Modifier
           .size(196.dp)
           .semantics {
             contentDescription = activeShare?.let {
-              "${it.key.label}: ${rupees(it.amount)}, ${(it.fraction * 100).roundToInt()}%"
-            } ?: "Category breakdown total ${rupees(totalAmount)}"
+              "${it.key.label}: ${rupees(it.amount)} per month"
+            } ?: "Monthly subscriptions ${rupees(totalMonthly)}"
           },
       ) {
-        val sw = 18.dp.toPx()
+        val sw = 16.dp.toPx()
         val pad = sw / 2f + 6.dp.toPx()
         val arcSz = Size(size.width - pad * 2, size.height - pad * 2)
         val topLeft = Offset(pad, pad)
-        val gapDeg = if (ringParts.size > 1) 6f else 0f
-        val availableDeg = 360f - gapDeg * ringParts.size
+        val gapDeg = if (shares.size > 1) 7f else 0f
+        val availableDeg = 360f - gapDeg * shares.size
         var angle = -90f
 
-        ringParts.forEach { (cat, frac, color) ->
-          val sweep = (availableDeg * frac).coerceAtLeast(4f)
-          val isSelected = selected == null || cat == selected
-          val strokeColor = if (isSelected) color else color.copy(alpha = 0.22f)
+        shares.forEach { sh ->
+          val sweep = (availableDeg * sh.fraction).coerceAtLeast(6f)
+          val color = Fin.subColor(sh.key)
+          val isSelected = selected == null || sh.key == selected
           drawArc(
-            color = strokeColor,
+            color = if (isSelected) color else color.copy(alpha = 0.22f),
             startAngle = angle,
             sweepAngle = sweep,
             useCenter = false,
@@ -105,115 +97,102 @@ internal fun CategoryBreakdown(
             size = arcSz,
             style = Stroke(sw, cap = StrokeCap.Round),
           )
-          if (selected != null && cat == selected) {
+          if (selected == sh.key) {
             val midRad = Math.toRadians((angle + sweep / 2f).toDouble())
             val r = arcSz.width / 2f
             val dot = Offset(center.x + (r * cos(midRad)).toFloat(), center.y + (r * sin(midRad)).toFloat())
-            drawCircle(HudColors.Background, radius = 6.dp.toPx(), center = dot)
-            drawCircle(HudColors.Cream, radius = 3.8.dp.toPx(), center = dot)
+            drawCircle(HudColors.Surface, radius = 6.dp.toPx(), center = dot)
+            drawCircle(HudColors.Cream, radius = 3.6.dp.toPx(), center = dot)
           }
           angle += sweep + gapDeg
         }
       }
 
-      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 42.dp)) {
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 40.dp)) {
         Text(
-          activeShare?.key?.label ?: "Total spent",
+          activeShare?.key?.label ?: "Monthly burn",
           style = Fin.Tiny,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(2.dp))
         Text(
-          rupees(activeShare?.amount ?: totalAmount),
+          rupees(activeShare?.amount ?: totalMonthly),
           style = JarvisType.TitleSerif.copy(color = Fin.Ink),
           maxLines = 1,
         )
         Spacer(Modifier.height(2.dp))
         Text(
-          activeShare?.let { "${(it.fraction * 100).roundToInt()}% of month" } ?: "${shares.size} categories",
-          style = Fin.Small.copy(color = activeShare?.let { Fin.color(it.key) } ?: Fin.Ink2),
+          activeShare?.let { "${(it.fraction * 100).roundToInt()}% of plans" } ?: "${shares.size} categories",
+          style = Fin.Small.copy(color = activeShare?.let { Fin.subColor(it.key) } ?: Fin.Ink2),
           maxLines = 1,
         )
       }
     }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(10.dp))
     shares.forEach { sh ->
       val on = sh.key == selected
-      val c = Fin.color(sh.key)
+      val c = Fin.subColor(sh.key)
       Row(
         Modifier
           .fillMaxWidth()
           .clip(RoundedCornerShape(12.dp))
-          .background(if (on) Fin.Raised else Color.Transparent)
+          .background(if (on) HudColors.SurfaceHigh else Color.Transparent)
           .clickable(role = Role.Button) { onSelect(if (on) null else sh.key) }
-          .padding(horizontal = 10.dp, vertical = 10.dp),
+          .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(c))
         Spacer(Modifier.width(10.dp))
         Text(sh.key.label, style = Fin.Body, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text("${(sh.fraction * 100).roundToInt()}%", style = Fin.Small, modifier = Modifier.width(42.dp), textAlign = TextAlign.End)
-        Text(rupees(sh.amount), style = Fin.BodyStrong, modifier = Modifier.width(92.dp), textAlign = TextAlign.End)
+        Text(rupees(sh.amount) + "/mo", style = Fin.BodyStrong, modifier = Modifier.width(96.dp), textAlign = TextAlign.End)
       }
     }
   }
 }
 
 /**
- * Day-part spending vs an even 25% typical baseline tick (Morning, Afternoon, Evening, Night).
+ * Pastel Renewal & Bill Calendar inspired by @itspsneha's Cycle Calendar:
+ * soft blush circles mark subscription renewals, lavender circles mark open bills,
+ * and today sits inside a warm espresso circle.
  */
 @Composable
-internal fun DayPartBreakdown(shares: List<Share<DayPart>>, modifier: Modifier = Modifier) {
-  if (shares.isEmpty()) return
-  val colors = mapOf(
-    DayPart.MORNING to HudColors.Amber,
-    DayPart.AFTERNOON to HudColors.Peach,
-    DayPart.EVENING to HudColors.Sky,
-    DayPart.NIGHT to HudColors.Lavender,
-  )
-  BentoCard(modifier = modifier, padding = 16.dp) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-      Text("Time of day vs even split", style = Fin.BodyStrong, modifier = Modifier.weight(1f))
-      Text("Dashed tick = 25%", style = Fin.Tiny)
-    }
-    Spacer(Modifier.height(14.dp))
-    shares.forEachIndexed { idx, sh ->
-      if (idx > 0) Spacer(Modifier.height(12.dp))
-      val pct = (sh.fraction * 100).roundToInt()
-      val delta = pct - 25
-      val deltaStr = when {
-        delta > 2 -> "+$delta% vs even"
-        delta < -2 -> "$delta% vs even"
-        else -> "Right around typical"
-      }
-      BaselineRangeBar(
-        label = "${sh.key.label} · $pct%",
-        valueText = rupees(sh.amount),
-        fraction = sh.fraction,
-        typicalFraction = 0.25f,
-        color = colors[sh.key] ?: HudColors.Sky,
-        deltaText = deltaStr,
-      )
-    }
-  }
-}
-
-/**
- * The month as a calm rounded calendar inside a bento card; tap any past/today cell to inspect
- * its payments. Future days have subtle outlines.
- */
-@Composable
-internal fun SpendCalendar(s: SpendInsights, selected: LocalDate?, onSelect: (LocalDate?) -> Unit) {
-  val first = s.month.atDay(1)
+internal fun RenewalCalendar(
+  today: LocalDate,
+  subscriptions: List<TrackedSubscription>,
+  bills: List<OrganizedItem>,
+  selected: LocalDate?,
+  onSelect: (LocalDate?) -> Unit,
+) {
+  val month = YearMonth.from(today)
+  val first = month.atDay(1)
   val lead = first.dayOfWeek.value - DayOfWeek.MONDAY.value
-  val days = s.month.lengthOfMonth()
-  val max = s.monthDays.maxOrNull()?.takeIf { it > 0 } ?: 1.0
+  val days = month.lengthOfMonth()
+  val subDates = subscriptions
+    .filterNot { it.isPaused }
+    .mapNotNull { it.nextRenewalDate?.let { d -> runCatching { LocalDate.parse(d) }.getOrNull() } }
+    .filter { YearMonth.from(it) == month }
+    .toSet()
+  val billDates = bills
+    .mapNotNull { it.dueDate?.let { d -> runCatching { LocalDate.parse(d) }.getOrNull() } }
+    .filter { YearMonth.from(it) == month }
+    .toSet()
+
   val cells: List<Int?> = List(lead) { null } + (1..days).toList()
   val rows = cells.chunked(7)
+  val monthTitle = "${month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${month.year}"
 
   BentoCard(padding = 16.dp) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      Text(monthTitle, style = JarvisType.SectionSerif, color = Fin.Ink, modifier = Modifier.weight(1f))
+      Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LegendDot("Renewal", HudColors.BlushSoft, HudColors.Blush)
+        LegendDot("Bill", HudColors.LavenderSoft, HudColors.Lavender)
+      }
+    }
+    Spacer(Modifier.height(12.dp))
     Row(Modifier.fillMaxWidth()) {
       listOf("M", "T", "W", "T", "F", "S", "S").forEach {
         Text(it, style = Fin.Tiny, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
@@ -226,16 +205,17 @@ internal fun SpendCalendar(s: SpendInsights, selected: LocalDate?, onSelect: (Lo
           val day = week.getOrNull(col)
           Box(Modifier.weight(1f).aspectRatio(1f).padding(3.dp)) {
             if (day != null) {
-              val date = s.month.atDay(day)
-              val future = date.isAfter(s.today)
-              val v = s.monthDays.getOrNull(day - 1) ?: 0.0
-              val step = if (v <= 0) -1 else (ceil(v / max * Fin.Heat.size).toInt() - 1).coerceIn(0, Fin.Heat.lastIndex)
-              val fill = when {
-                future -> Color.Transparent
-                step < 0 -> Fin.Track
-                else -> Fin.Heat[step]
-              }
+              val date = month.atDay(day)
+              val hasSub = date in subDates
+              val hasBill = date in billDates
               val isSel = date == selected
+              val isToday = date == today
+              val fill = when {
+                isSel -> HudColors.Cream
+                hasSub -> HudColors.BlushSoft
+                hasBill -> HudColors.LavenderSoft
+                else -> Color.Transparent
+              }
               Box(
                 Modifier
                   .fillMaxWidth()
@@ -244,26 +224,26 @@ internal fun SpendCalendar(s: SpendInsights, selected: LocalDate?, onSelect: (Lo
                   .background(fill)
                   .then(
                     when {
-                      isSel -> Modifier.border(2.dp, HudColors.Cream, CircleShape)
-                      date == s.today -> Modifier.border(1.5.dp, HudColors.Amber, CircleShape)
-                      future -> Modifier.border(1.dp, Fin.Hairline, CircleShape)
+                      isToday && !isSel -> Modifier.border(1.5.dp, HudColors.Cream, CircleShape)
+                      hasSub && !isSel -> Modifier.border(1.dp, HudColors.Blush.copy(alpha = 0.45f), CircleShape)
+                      hasBill && !isSel -> Modifier.border(1.dp, HudColors.Lavender.copy(alpha = 0.45f), CircleShape)
                       else -> Modifier
                     },
                   )
-                  .clickable(enabled = !future, role = Role.Button) { onSelect(if (isSel) null else date) }
-                  .semantics { contentDescription = "$day: ${if (future) "upcoming" else rupees(v)}" },
+                  .clickable(role = Role.Button) { onSelect(if (isSel) null else date) }
+                  .semantics { contentDescription = "$day ${month.month.name}" },
                 contentAlignment = Alignment.Center,
               ) {
                 Text(
                   "$day",
                   style = Fin.Tiny.copy(
                     color = when {
-                      future -> Fin.Ink3
-                      step >= 3 -> HudColors.OnCyan
-                      step >= 0 -> Fin.Ink
-                      else -> Fin.Ink2
+                      isSel -> HudColors.OnCream
+                      hasSub -> HudColors.Blush
+                      hasBill -> HudColors.Lavender
+                      else -> Fin.Ink
                     },
-                    fontWeight = if (date == s.today || isSel) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isToday || isSel || hasSub || hasBill) FontWeight.Bold else FontWeight.Normal,
                   ),
                 )
               }
@@ -272,27 +252,20 @@ internal fun SpendCalendar(s: SpendInsights, selected: LocalDate?, onSelect: (Lo
         }
       }
     }
-    Spacer(Modifier.height(12.dp))
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
-      Text("Less", style = Fin.Tiny)
-      Spacer(Modifier.width(6.dp))
-      (listOf(Fin.Track) + Fin.Heat).forEach {
-        Box(Modifier.padding(horizontal = 2.dp).size(10.dp).clip(CircleShape).background(it))
-      }
-      Spacer(Modifier.width(6.dp))
-      Text("More", style = Fin.Tiny)
-    }
-    val note = weekNote(s)
-    if (note.isNotEmpty()) {
-      Spacer(Modifier.height(12.dp))
-      Text(note, style = Fin.Small)
-    }
   }
 }
 
-private fun weekNote(s: SpendInsights): String {
-  val wd = s.weekdayAverage
-  val we = s.weekendAverage
-  if (wd <= 0 && we <= 0) return ""
-  return "On average ${rupees(wd)} a day on weekdays, ${rupees(we)} on weekends (last 4 weeks)."
+@Composable
+private fun LegendDot(label: String, fill: Color, stroke: Color) {
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    Box(
+      Modifier
+        .size(9.dp)
+        .clip(CircleShape)
+        .background(fill)
+        .border(1.dp, stroke, CircleShape),
+    )
+    Spacer(Modifier.width(4.dp))
+    Text(label, style = Fin.Tiny)
+  }
 }

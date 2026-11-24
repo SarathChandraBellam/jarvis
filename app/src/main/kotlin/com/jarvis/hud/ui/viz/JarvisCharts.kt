@@ -53,27 +53,30 @@ import kotlin.math.sin
 val BentoShape = RoundedCornerShape(22.dp)
 
 /**
- * Calm midnight bento container with optional soft radial wash in the top-left corner,
- * inspired by personal-software metric cards.
+ * Calm paper-and-pastel container inspired by @itspsneha's personal software aesthetic.
+ * Uses crisp white or soft pastel wash fills with subtle warm hairline borders.
  */
 @Composable
 fun BentoCard(
   modifier: Modifier = Modifier,
   tint: Color? = null,
+  pastelBg: Color? = null,
   onClick: (() -> Unit)? = null,
   padding: Dp = 16.dp,
   content: @Composable ColumnScope.() -> Unit,
 ) {
-  val bg = if (tint != null) {
-    Modifier.background(
-      Brush.verticalGradient(
-        listOf(tint.copy(alpha = 0.14f), HudColors.Surface, HudColors.Surface),
-      ),
+  val bg = when {
+    pastelBg != null -> Modifier.background(pastelBg)
+    tint != null -> Modifier.background(
+      Brush.verticalGradient(listOf(tint.copy(alpha = 0.11f), HudColors.Surface, HudColors.Surface)),
     )
-  } else {
-    Modifier.background(HudColors.Surface)
+    else -> Modifier.background(HudColors.Surface)
   }
-  val border = if (tint != null) tint.copy(alpha = 0.22f) else HudColors.OutlineSoft
+  val border = when {
+    pastelBg != null -> HudColors.OutlineSoft
+    tint != null -> tint.copy(alpha = 0.20f)
+    else -> HudColors.Outline
+  }
   Column(
     modifier
       .fillMaxWidth()
@@ -87,7 +90,7 @@ fun BentoCard(
 }
 
 /**
- * Thick rounded-cap donut arc ring (full 360° or partial 250° gauge) with centered label.
+ * Soft pastel donut arc ring with rounded stroke caps and centered editorial readout.
  */
 @Composable
 fun DonutArcRing(
@@ -110,7 +113,7 @@ fun DonutArcRing(
       val arcSize = Size(this.size.width - pad * 2, this.size.height - pad * 2)
       val topLeft = Offset(pad, pad)
       drawArc(
-        color = HudColors.SurfaceHighest,
+        color = color.copy(alpha = 0.16f),
         startAngle = startAngle,
         sweepAngle = totalSweep,
         useCenter = false,
@@ -129,11 +132,6 @@ fun DonutArcRing(
           size = arcSize,
           style = Stroke(sw, cap = StrokeCap.Round),
         )
-        // Subtle bright highlight at the tip of the arc.
-        val endRad = Math.toRadians((startAngle + sweep).toDouble())
-        val r = arcSize.width / 2f
-        val tip = Offset(center.x + (r * cos(endRad)).toFloat(), center.y + (r * sin(endRad)).toFloat())
-        drawCircle(HudColors.Cream, radius = sw * 0.28f, center = tip)
       }
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -158,7 +156,7 @@ data class ScoreRingSpec(
   val onClick: (() -> Unit)? = null,
 )
 
-/** Row of 3 circular score rings + calm reassuring guidance line underneath. */
+/** Row of 3 calm pastel score rings + reassuring guidance line underneath. */
 @Composable
 fun ScoreRingsCard(
   rings: List<ScoreRingSpec>,
@@ -207,13 +205,84 @@ fun ScoreRingsCard(
   }
 }
 
+data class DayPillItem(
+  val letter: String,
+  val dayNumber: String,
+  val isSelected: Boolean,
+  val hasMarker: Boolean,
+  val onClick: () -> Unit,
+)
+
+/**
+ * Warm sand 7-day pill selector card inspired by @itspsneha's Day context card.
+ */
+@Composable
+fun DaySelectorStrip(
+  eyebrow: String,
+  headline: String,
+  rightHeadline: String,
+  rightSub: String,
+  days: List<DayPillItem>,
+  modifier: Modifier = Modifier,
+) {
+  BentoCard(modifier = modifier, pastelBg = HudColors.SandSoft, padding = 16.dp) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+      Column(Modifier.weight(1f)) {
+        Text(eyebrow, style = MaterialTheme.typography.labelMedium, color = HudColors.Sand)
+        Spacer(Modifier.height(2.dp))
+        Text(headline, style = JarvisType.TitleSerif, color = HudColors.Text)
+      }
+      Column(horizontalAlignment = Alignment.End) {
+        Text(rightHeadline, style = JarvisType.MetricMedium, color = HudColors.Text)
+        Text(rightSub, style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim)
+      }
+    }
+    Spacer(Modifier.height(14.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+      days.forEach { d ->
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = d.onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        ) {
+          Text(d.letter, style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim)
+          Spacer(Modifier.height(6.dp))
+          Box(
+            Modifier
+              .size(32.dp)
+              .clip(CircleShape)
+              .background(if (d.isSelected) HudColors.Cream else HudColors.Surface.copy(alpha = 0.72f)),
+            contentAlignment = Alignment.Center,
+          ) {
+            Text(
+              d.dayNumber,
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (d.isSelected) FontWeight.Bold else FontWeight.Medium,
+              ),
+              color = if (d.isSelected) HudColors.OnCream else HudColors.Text,
+            )
+          }
+          Spacer(Modifier.height(4.dp))
+          Box(
+            Modifier
+              .size(5.dp)
+              .clip(CircleShape)
+              .background(if (d.hasMarker) HudColors.Blush else Color.Transparent),
+          )
+        }
+      }
+    }
+  }
+}
+
 data class TimelineSpan(val startFrac: Float, val endFrac: Float, val color: Color)
 
 data class TimelineDot(val frac: Float, val color: Color, val radiusDp: Float = 5f)
 
 /**
- * 24-hour unified day timeline bar (`12 am` to `12 am`) showing calendar blocks,
- * calls, and spending dots along one calm horizontal capsule.
+ * 24-hour unified day timeline bar (`12 am` to `12 am`) on a calm paper capsule.
  */
 @Composable
 fun DayTimelineBar(
@@ -233,14 +302,13 @@ fun DayTimelineBar(
     Canvas(
       Modifier
         .fillMaxWidth()
-        .height(34.dp)
+        .height(32.dp)
         .semantics { contentDescription = "24 hour timeline: $summaryLine" },
     ) {
       val h = size.height
       val w = size.width
       val r = h / 2f
 
-      // Base midnight capsule + subtle daytime band (6 am to 10 pm).
       drawRoundRect(
         color = HudColors.SurfaceHigh,
         cornerRadius = CornerRadius(r, r),
@@ -248,43 +316,39 @@ fun DayTimelineBar(
       val dayStartX = w * 0.25f
       val dayEndX = w * (22f / 24f)
       drawRect(
-        color = HudColors.SurfaceHighest.copy(alpha = 0.55f),
+        color = HudColors.SandSoft.copy(alpha = 0.55f),
         topLeft = Offset(dayStartX, 2.dp.toPx()),
         size = Size((dayEndX - dayStartX).coerceAtLeast(0f), h - 4.dp.toPx()),
       )
 
-      // Spans (calendar events, calls).
       spans.forEach { sp ->
         val x1 = w * sp.startFrac.coerceIn(0f, 1f)
         val x2 = w * sp.endFrac.coerceIn(sp.startFrac, 1f)
         val segW = (x2 - x1).coerceAtLeast(6.dp.toPx())
         drawRoundRect(
-          color = sp.color.copy(alpha = 0.78f),
+          color = sp.color.copy(alpha = 0.8f),
           topLeft = Offset(x1, 6.dp.toPx()),
           size = Size(segW, h - 12.dp.toPx()),
           cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
         )
       }
 
-      // Now marker hairline.
       val nx = w * nowFrac.coerceIn(0f, 1f)
       drawLine(
-        color = HudColors.Cream.copy(alpha = 0.7f),
+        color = HudColors.Cream.copy(alpha = 0.8f),
         start = Offset(nx, 2.dp.toPx()),
         end = Offset(nx, h - 2.dp.toPx()),
         strokeWidth = 1.5.dp.toPx(),
       )
 
-      // Transaction / event dots.
       dots.forEach { d ->
-        val cx = (w * d.frac.coerceIn(0.02f, 0.98f))
+        val cx = w * d.frac.coerceIn(0.02f, 0.98f)
         val cy = h / 2f
         val rad = d.radiusDp.dp.toPx()
-        drawCircle(HudColors.Background, radius = rad + 2.dp.toPx(), center = Offset(cx, cy))
+        drawCircle(HudColors.Surface, radius = rad + 2.dp.toPx(), center = Offset(cx, cy))
         drawCircle(d.color, radius = rad, center = Offset(cx, cy))
       }
 
-      // Outer capsule stroke so everything feels cleanly framed.
       drawRoundRect(
         color = HudColors.Outline,
         cornerRadius = CornerRadius(r, r),
@@ -315,7 +379,7 @@ fun DayTimelineBar(
 }
 
 /**
- * Tinted bento card with a smooth cubic Bezier area sparkline and glowing endpoint dot.
+ * Pastel gradient card with smooth cubic-Bezier area sparkline and endpoint dot.
  */
 @Composable
 fun SparklineAreaCard(
@@ -324,16 +388,17 @@ fun SparklineAreaCard(
   subtitle: String,
   series: List<Float>,
   tint: Color,
+  pastelBg: Color = HudColors.Surface,
   modifier: Modifier = Modifier,
   onClick: (() -> Unit)? = null,
 ) {
-  BentoCard(modifier = modifier, tint = tint, onClick = onClick, padding = 14.dp) {
+  BentoCard(modifier = modifier, pastelBg = pastelBg, onClick = onClick, padding = 14.dp) {
     Text(title, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Spacer(Modifier.height(6.dp))
     Text(value, style = JarvisType.MetricMedium, color = HudColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Text(subtitle, style = MaterialTheme.typography.labelSmall, color = HudColors.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Spacer(Modifier.height(12.dp))
-    SmoothSparkline(series = series, color = tint, modifier = Modifier.fillMaxWidth().height(42.dp))
+    SmoothSparkline(series = series, color = tint, modifier = Modifier.fillMaxWidth().height(40.dp))
   }
 }
 
@@ -366,7 +431,7 @@ fun SmoothSparkline(series: List<Float>, color: Color, modifier: Modifier = Modi
     }
     drawPath(
       path = fillPath,
-      brush = Brush.verticalGradient(listOf(color.copy(alpha = 0.28f), color.copy(alpha = 0.0f))),
+      brush = Brush.verticalGradient(listOf(color.copy(alpha = 0.25f), color.copy(alpha = 0.0f))),
     )
     drawPath(
       path = strokePath,
@@ -374,12 +439,11 @@ fun SmoothSparkline(series: List<Float>, color: Color, modifier: Modifier = Modi
       style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
     val last = coords.last()
-    drawCircle(HudColors.Background, radius = 4.dp.toPx(), center = last)
+    drawCircle(HudColors.Surface, radius = 4.dp.toPx(), center = last)
     drawCircle(color, radius = 2.6.dp.toPx(), center = last)
   }
 }
 
-/** Builds a smooth C1-continuous cubic Bezier path through [points]. */
 fun smoothCubicPath(points: List<Offset>): Path {
   val path = Path()
   if (points.isEmpty()) return path
@@ -397,22 +461,21 @@ fun smoothCubicPath(points: List<Offset>): Path {
 data class RadarAxis(val label: String, val fraction: Float, val detail: String)
 
 /**
- * 6-axis hexagonal radar chart ("Your pulse / balance") with concentric hex rings,
- * warm radial gradient polygon fill, and crisp vertex markers.
+ * 6-axis hexagonal radar chart on warm paper with concentric rings and contributor bars.
  */
 @Composable
 fun HexRadarChart(
   axes: List<RadarAxis>,
   score: Int,
   headline: String,
-  accent: Color = HudColors.Amber,
+  accent: Color = HudColors.Sand,
   modifier: Modifier = Modifier,
 ) {
   val six = if (axes.size >= 6) axes.take(6) else axes + List(6 - axes.size) { RadarAxis("", 0f, "") }
   BentoCard(modifier = modifier, padding = 18.dp) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
       Column(Modifier.weight(1f)) {
-        Text("Daily pulse", style = MaterialTheme.typography.titleMedium, color = HudColors.Text)
+        Text("Daily balance", style = MaterialTheme.typography.titleMedium, color = HudColors.Text)
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.Bottom) {
           Text("$score", style = JarvisType.HeroSerif, color = HudColors.Text)
@@ -424,12 +487,10 @@ fun HexRadarChart(
     }
     Spacer(Modifier.height(8.dp))
     BoxWithConstraints(
-      Modifier.fillMaxWidth().height(236.dp),
+      Modifier.fillMaxWidth().height(232.dp),
       contentAlignment = Alignment.Center,
     ) {
-      val boxW = maxWidth
-      val boxH = maxHeight
-      val chartSize = min(boxW.value, boxH.value).dp
+      val chartSize = min(maxWidth.value, maxHeight.value).dp
       Canvas(
         Modifier
           .size(chartSize)
@@ -443,7 +504,6 @@ fun HexRadarChart(
           return Offset(cx + (maxR * frac * cos(angle)).toFloat(), cy + (maxR * frac * sin(angle)).toFloat())
         }
 
-        // 4 concentric hexagonal web rings.
         listOf(0.25f, 0.50f, 0.75f, 1.0f).forEach { ring ->
           val hex = Path().apply {
             for (i in 0 until 6) {
@@ -452,15 +512,13 @@ fun HexRadarChart(
             }
             close()
           }
-          drawPath(hex, HudColors.Outline.copy(alpha = 0.7f), style = Stroke(1.dp.toPx()))
+          drawPath(hex, HudColors.Outline, style = Stroke(1.dp.toPx()))
         }
 
-        // 6 radial spokes.
         for (i in 0 until 6) {
-          drawLine(HudColors.Outline.copy(alpha = 0.55f), Offset(cx, cy), vertex(i, 1f), strokeWidth = 1.dp.toPx())
+          drawLine(HudColors.OutlineSoft, Offset(cx, cy), vertex(i, 1f), strokeWidth = 1.dp.toPx())
         }
 
-        // Data polygon.
         val dataPts = six.mapIndexed { i, ax -> vertex(i, ax.fraction.coerceIn(0.08f, 1f)) }
         val dataPath = Path().apply {
           dataPts.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
@@ -468,18 +526,16 @@ fun HexRadarChart(
         }
         drawPath(
           dataPath,
-          Brush.radialGradient(listOf(accent.copy(alpha = 0.44f), accent.copy(alpha = 0.14f)), center = Offset(cx, cy), radius = maxR),
+          Brush.radialGradient(listOf(accent.copy(alpha = 0.34f), accent.copy(alpha = 0.14f)), center = Offset(cx, cy), radius = maxR),
         )
         drawPath(dataPath, accent, style = Stroke(2.dp.toPx(), join = StrokeJoin.Round))
 
-        // Vertex dots.
         dataPts.forEach { p ->
-          drawCircle(HudColors.Background, radius = 4.5.dp.toPx(), center = p)
-          drawCircle(HudColors.Cream, radius = 3.dp.toPx(), center = p)
+          drawCircle(HudColors.Surface, radius = 4.5.dp.toPx(), center = p)
+          drawCircle(HudColors.Cream, radius = 2.8.dp.toPx(), center = p)
         }
       }
 
-      // Perimeter labels placed cleanly around the hexagon.
       val positions = listOf(
         Alignment.TopCenter to Pair(0.dp, 2.dp),
         Alignment.TopEnd to Pair((-10).dp, 46.dp),
@@ -507,11 +563,11 @@ fun HexRadarChart(
         label = ax.label,
         valueText = ax.detail,
         fraction = ax.fraction,
-        typicalFraction = 0.72f,
+        typicalFraction = 0.70f,
         color = when {
-          ax.fraction >= 0.7f -> HudColors.Mint
+          ax.fraction >= 0.7f -> HudColors.Sage
           ax.fraction >= 0.45f -> accent
-          else -> HudColors.Coral
+          else -> HudColors.Blush
         },
       )
     }
@@ -519,7 +575,7 @@ fun HexRadarChart(
 }
 
 /**
- * Horizontal contributor / baseline bar with a crisp vertical typical marker tick.
+ * Horizontal baseline bar with a vertical dashed typical marker tick.
  */
 @Composable
 fun BaselineRangeBar(
@@ -543,7 +599,7 @@ fun BaselineRangeBar(
       val yTop = (size.height - barH) / 2f
       val r = barH / 2f
       drawRoundRect(
-        color = HudColors.SurfaceHighest,
+        color = HudColors.SurfaceHigh,
         topLeft = Offset(0f, yTop),
         size = Size(size.width, barH),
         cornerRadius = CornerRadius(r, r),
@@ -559,10 +615,10 @@ fun BaselineRangeBar(
       if (typicalFraction != null) {
         val tx = size.width * typicalFraction.coerceIn(0.02f, 0.98f)
         drawLine(
-          color = HudColors.Cream.copy(alpha = 0.85f),
+          color = HudColors.Text.copy(alpha = 0.55f),
           start = Offset(tx, 0f),
           end = Offset(tx, size.height),
-          strokeWidth = 1.5.dp.toPx(),
+          strokeWidth = 1.4.dp.toPx(),
           pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f)),
         )
       }
@@ -581,7 +637,7 @@ data class ConsistencyDay(
   val tooltip: String,
 )
 
-/** 7-day rounded squircle strip showing daily spending/habit rhythm at a glance. */
+/** 7-day rounded squircle consistency strip in calm sage/sand/blush. */
 @Composable
 fun ConsistencyStrip(
   title: String,
@@ -600,9 +656,9 @@ fun ConsistencyStrip(
               .fillMaxWidth()
               .height(22.dp)
               .clip(RoundedCornerShape(7.dp))
-              .background(if (d.active) d.fillColor else Color.Transparent)
+              .background(if (d.active) d.fillColor else HudColors.SurfaceHigh)
               .then(
-                if (!d.active) Modifier.border(1.5.dp, HudColors.Outline, RoundedCornerShape(7.dp)) else Modifier,
+                if (!d.active) Modifier.border(1.dp, HudColors.Outline, RoundedCornerShape(7.dp)) else Modifier,
               )
               .semantics { contentDescription = d.tooltip },
           )

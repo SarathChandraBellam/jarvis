@@ -61,13 +61,12 @@ import com.jarvis.hud.ui.theme.JarvisType
 import com.jarvis.hud.ui.viz.BentoCard
 
 private val SuggestedPrompts = listOf(
-  "What did I spend today?",
+  "What subscriptions renew soon?",
   "Any bills due?",
   "Where are my deliveries?",
   "Brief me",
 )
 
-/** Ask tab: calm personal AI conversation with Jarvis. */
 @Composable
 fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: PaddingValues) {
   var input by rememberSaveable { mutableStateOf("") }
@@ -101,9 +100,9 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
     ) {
       if (state.settings.apiKey.isBlank()) {
         item(key = "nokey") {
-          BentoCard(tint = HudColors.Amber, padding = 14.dp) {
+          BentoCard(pastelBg = HudColors.SandSoft, padding = 14.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(Icons.Outlined.Info, null, tint = HudColors.Amber, modifier = Modifier.size(18.dp))
+              Icon(Icons.Outlined.Info, null, tint = HudColors.Sand, modifier = Modifier.size(18.dp))
               Spacer(Modifier.width(10.dp))
               Text(
                 "Offline mode: answers come from on-device rules. Add an OpenRouter key for smarter replies.",
@@ -113,7 +112,7 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
               )
             }
             TextButton(onClick = actions::onOpenSettings, modifier = Modifier.align(Alignment.End)) {
-              Text("Add key", color = HudColors.Cream)
+              Text("Add key", color = HudColors.Text)
             }
           }
         }
@@ -139,7 +138,7 @@ fun AskScreen(state: JarvisUiState, actions: JarvisActions, contentPadding: Padd
           enabled = !state.isAskingAi,
           shape = CircleShape,
           colors = SuggestionChipDefaults.suggestionChipColors(containerColor = HudColors.Surface, labelColor = HudColors.Text),
-          border = SuggestionChipDefaults.suggestionChipBorder(enabled = true, borderColor = HudColors.OutlineSoft),
+          border = SuggestionChipDefaults.suggestionChipBorder(enabled = true, borderColor = HudColors.Outline),
         )
       }
     }
@@ -184,7 +183,7 @@ private fun AskIntro(callsign: String) {
     Text("How can I help, ${callsign.ifBlank { "Sir" }}?", style = JarvisType.TitleSerif, color = HudColors.Text)
     Spacer(Modifier.height(6.dp))
     Text(
-      "Ask about your spending, bills, deliveries, schedule or messages.",
+      "Ask about your subscriptions, bills, deliveries, day plan or messages.",
       style = MaterialTheme.typography.bodyMedium,
       color = HudColors.TextDim,
       textAlign = TextAlign.Center,
@@ -205,7 +204,7 @@ private fun ChatBubble(m: ChatMessage, onSpeak: () -> Unit) {
       Box(
         Modifier
           .background(if (user) HudColors.Cream else HudColors.Surface, shape)
-          .then(if (!user) Modifier.border(1.dp, HudColors.OutlineSoft, shape) else Modifier)
+          .then(if (!user) Modifier.border(1.dp, HudColors.Outline, shape) else Modifier)
           .padding(horizontal = 15.dp, vertical = 11.dp),
       ) {
         Text(m.content, style = MaterialTheme.typography.bodyMedium, color = if (user) HudColors.OnCream else HudColors.Text)
@@ -232,12 +231,12 @@ private fun TypingIndicator() {
   Row(
     Modifier
       .background(HudColors.Surface, RoundedCornerShape(22.dp))
-      .border(1.dp, HudColors.OutlineSoft, RoundedCornerShape(22.dp))
+      .border(1.dp, HudColors.Outline, RoundedCornerShape(22.dp))
       .padding(horizontal = 16.dp, vertical = 14.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     repeat(3) { i ->
-      Box(Modifier.padding(horizontal = 3.dp).size(7.dp).background(HudColors.Amber.copy(alpha = 0.5f + i * 0.2f), CircleShape))
+      Box(Modifier.padding(horizontal = 3.dp).size(7.dp).background(HudColors.Blush.copy(alpha = 0.45f + i * 0.2f), CircleShape))
     }
   }
 }

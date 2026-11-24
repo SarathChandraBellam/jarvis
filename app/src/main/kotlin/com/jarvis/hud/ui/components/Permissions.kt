@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HourglassBottom
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -39,13 +40,17 @@ private fun accessList(
   onRequestRuntime: () -> Unit,
   onOpenNotificationAccess: () -> Unit,
   onOpenUsageAccess: () -> Unit,
-) = listOf(
-  Access("SMS", "Bank alerts, bills and payments", Icons.Outlined.Sms, p.smsGranted, onRequestRuntime),
-  Access("Notifications", "Deliveries, messages and app alerts", Icons.Outlined.Notifications, p.notificationAccessGranted, onOpenNotificationAccess),
-  Access("Calendar", "Today's schedule", Icons.Outlined.CalendarMonth, p.calendarGranted, onRequestRuntime),
-  Access("Call log", "Recent and missed calls", Icons.Outlined.Call, p.callLogGranted, onRequestRuntime),
-  Access("Screen time", "Which apps you used today", Icons.Outlined.HourglassBottom, p.usageAccessGranted, onOpenUsageAccess),
-)
+  includePostNotifications: Boolean = false,
+) = buildList {
+  add(Access("SMS", "Subscription alerts, bills and deliveries", Icons.Outlined.Sms, p.smsGranted, onRequestRuntime))
+  add(Access("Notifications", "App alerts, renewals and messages", Icons.Outlined.Notifications, p.notificationAccessGranted, onOpenNotificationAccess))
+  add(Access("Calendar", "Today's schedule and planner", Icons.Outlined.CalendarMonth, p.calendarGranted, onRequestRuntime))
+  add(Access("Call log", "Recent and missed call nudges", Icons.Outlined.Call, p.callLogGranted, onRequestRuntime))
+  add(Access("Screen time", "Focus insights and gentle nudges", Icons.Outlined.HourglassBottom, p.usageAccessGranted, onOpenUsageAccess))
+  if (includePostNotifications) {
+    add(Access("Proactive alerts", "Renewal reminders and morning digests", Icons.Outlined.NotificationsActive, p.notificationsPostGranted, onRequestRuntime))
+  }
+}
 
 @Composable
 fun PermissionList(
@@ -55,8 +60,9 @@ fun PermissionList(
   onOpenUsageAccess: () -> Unit,
   modifier: Modifier = Modifier,
   onlyMissing: Boolean = false,
+  includePostNotifications: Boolean = false,
 ) {
-  val rows = accessList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess)
+  val rows = accessList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess, includePostNotifications)
     .filter { !onlyMissing || !it.granted }
   Column(modifier) {
     rows.forEach { a ->
@@ -64,15 +70,15 @@ fun PermissionList(
         title = a.title,
         subtitle = a.why,
         icon = a.icon,
-        tint = if (a.granted) HudColors.Mint else HudColors.Sky,
+        tint = if (a.granted) HudColors.Sage else HudColors.SlateBlue,
         trailing = {
           if (a.granted) {
-            Icon(Icons.Outlined.CheckCircle, "Allowed", tint = HudColors.Mint, modifier = Modifier.size(22.dp))
+            Icon(Icons.Outlined.CheckCircle, "Allowed", tint = HudColors.Sage, modifier = Modifier.size(22.dp))
           } else {
             FilledTonalButton(
               onClick = a.grant,
               contentPadding = PaddingValues(horizontal = 16.dp),
-              colors = ButtonDefaults.filledTonalButtonColors(containerColor = HudColors.Cream, contentColor = HudColors.OnCream),
+              colors = ButtonDefaults.filledTonalButtonColors(containerColor = HudColors.BlushSoft, contentColor = HudColors.Text),
             ) { Text("Allow") }
           }
         },
@@ -81,7 +87,6 @@ fun PermissionList(
   }
 }
 
-/** Home-screen card nudging the user to finish granting access. Hidden when everything is granted. */
 @Composable
 fun SetupCard(
   permissions: PermissionStatus,
@@ -91,17 +96,17 @@ fun SetupCard(
   modifier: Modifier = Modifier,
 ) {
   val granted = permissions.grantedCount
-  if (granted == 5) return
-  BentoCard(modifier = modifier, tint = HudColors.Sky) {
+  if (granted == 5 && permissions.notificationsPostGranted) return
+  BentoCard(modifier = modifier, pastelBg = HudColors.SlateBlueSoft) {
     Text("Finish setting up", style = JarvisType.SectionSerif, color = HudColors.Text)
     Spacer(Modifier.height(4.dp))
     Text(
-      "$granted of 5 sources connected. Jarvis only reads data on this phone.",
+      "$granted of 5 sources connected. Jarvis stays local on this phone.",
       style = MaterialTheme.typography.bodySmall,
       color = HudColors.TextDim,
     )
     Spacer(Modifier.height(10.dp))
-    Meter(granted / 5f, HudColors.Sky)
+    Meter(granted / 5f, HudColors.SlateBlue)
     Spacer(Modifier.height(6.dp))
     PermissionList(permissions, onRequestRuntime, onOpenNotificationAccess, onOpenUsageAccess, onlyMissing = true)
   }

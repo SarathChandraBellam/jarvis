@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +24,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jarvis.hud.insights.SpendCategory
+import com.jarvis.hud.model.SubscriptionCategory
 import com.jarvis.hud.ui.components.HudFormat
 import com.jarvis.hud.ui.theme.HudColors
 import com.jarvis.hud.ui.theme.JarvisType
@@ -31,8 +32,7 @@ import java.util.Locale
 import kotlin.math.roundToLong
 
 /*
- * Calm midnight-bento visual vocabulary for the Money tab.
- * Editorial serif hero figures paired with tabular sans numerals and soft, low-glare accents.
+ * Warm paper & pastel visual vocabulary for the Subscriptions & Bills tab.
  */
 internal object Fin {
   val Surface = HudColors.Background
@@ -45,35 +45,19 @@ internal object Fin {
   val Ink2 = HudColors.TextDim
   val Ink3 = HudColors.TextMuted
 
-  val Accent = HudColors.Sky
-  val Link = HudColors.Cream
-  val LastMonth = Color(0xFF5D6E8C)
-  val Positive = HudColors.Mint
-  val Warning = HudColors.Amber
+  val Accent = HudColors.Blush
+  val Link = HudColors.Sand
+  val Positive = HudColors.Sage
+  val Warning = HudColors.Sand
   val Critical = HudColors.Coral
-  val Neutral = Color(0xFF3E4B63)
-  val NeutralLight = Color(0xFF8393AA)
+  val Neutral = HudColors.SurfaceHighest
 
-  /** Sequential amber-gold ramp for the calm spend calendar. */
-  val Heat = listOf(
-    Color(0xFF21375B),
-    Color(0xFF2F5386),
-    Color(0xFF4579B8),
-    Color(0xFF6BA3E5),
-    Color(0xFF9AC5F6),
-  )
-
-  /** Calm categorical palette: colour stays bound to the category regardless of rank. */
-  fun color(c: SpendCategory): Color = when (c) {
-    SpendCategory.FOOD -> HudColors.Amber
-    SpendCategory.SHOPPING -> HudColors.Coral
-    SpendCategory.GROCERIES -> HudColors.Mint
-    SpendCategory.BILLS -> HudColors.Peach
-    SpendCategory.TRANSPORT -> HudColors.Sky
-    SpendCategory.FUEL -> Color(0xFF7FD18C)
-    SpendCategory.ENTERTAINMENT -> HudColors.Lavender
-    SpendCategory.HEALTH -> Color(0xFFE589B4)
-    SpendCategory.TRANSFERS, SpendCategory.OTHER -> NeutralLight
+  fun subColor(c: SubscriptionCategory): Color = when (c) {
+    SubscriptionCategory.STREAMING -> HudColors.Blush
+    SubscriptionCategory.SOFTWARE -> HudColors.Lavender
+    SubscriptionCategory.TELECOM -> HudColors.SlateBlue
+    SubscriptionCategory.FITNESS -> HudColors.Sage
+    SubscriptionCategory.UTILITIES -> HudColors.Sand
   }
 
   val Hero = JarvisType.HeroSerif.copy(color = Ink)
@@ -87,7 +71,7 @@ internal object Fin {
 
 internal fun rupees(v: Double) = HudFormat.money(v.roundToLong().toDouble())
 
-/** ₹980 · ₹12.4K · ₹3.2L — for axis ticks and tight spots. */
+/** ₹980 · ₹12.4K · ₹3.2L — for compact chart readouts. */
 internal fun rupeesShort(v: Double): String = when {
   v >= 1_00_000 -> "₹" + trim(v / 1_00_000) + "L"
   v >= 1_000 -> "₹" + trim(v / 1_000) + "K"
@@ -96,16 +80,16 @@ internal fun rupeesShort(v: Double): String = when {
 
 private fun trim(x: Double) = String.format(Locale.ENGLISH, "%.1f", x).removeSuffix(".0")
 
-/** Pill-style three-way switch at the top of the Money tab. */
+/** Pastel pill three-way switch at the top of the Subs tab. */
 @Composable
 internal fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
   Row(
     modifier
       .fillMaxWidth()
       .height(44.dp)
-      .clip(RoundedCornerShape(22.dp))
-      .background(Fin.Card)
-      .border(1.dp, Fin.Hairline, RoundedCornerShape(22.dp))
+      .clip(CircleShape)
+      .background(HudColors.SurfaceHigh)
+      .border(1.dp, Fin.Hairline, CircleShape)
       .padding(4.dp),
     horizontalArrangement = Arrangement.spacedBy(4.dp),
   ) {
@@ -115,15 +99,16 @@ internal fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int)
         Modifier
           .weight(1f)
           .fillMaxHeight()
-          .clip(RoundedCornerShape(18.dp))
-          .background(if (on) HudColors.Cream else Color.Transparent)
+          .clip(CircleShape)
+          .background(if (on) HudColors.Surface else Color.Transparent)
+          .then(if (on) Modifier.border(1.dp, HudColors.Outline, CircleShape) else Modifier)
           .clickable(role = Role.Tab) { onSelect(i) },
         contentAlignment = Alignment.Center,
       ) {
         Text(
           label,
           style = Fin.Small.copy(
-            color = if (on) HudColors.OnCream else Fin.Ink2,
+            color = if (on) HudColors.Text else Fin.Ink2,
             fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
           ),
         )
@@ -140,7 +125,7 @@ internal fun SectionHeader(title: String, modifier: Modifier = Modifier, action:
     if (action != null && onAction != null) {
       Text(
         action,
-        style = Fin.Small.copy(color = HudColors.Amber, fontWeight = FontWeight.Medium),
+        style = Fin.Small.copy(color = HudColors.Blush, fontWeight = FontWeight.Medium),
         modifier = Modifier.clickable(role = Role.Button, onClick = onAction).padding(4.dp),
       )
     }
@@ -150,4 +135,19 @@ internal fun SectionHeader(title: String, modifier: Modifier = Modifier, action:
 @Composable
 internal fun Divider(modifier: Modifier = Modifier) {
   Box(modifier.fillMaxWidth().height(1.dp).background(Fin.Hairline))
+}
+
+internal fun niceCeil(v: Double): Double {
+  if (v <= 0) return 1.0
+  val step = v / 3
+  val mag = Math.pow(10.0, kotlin.math.floor(kotlin.math.log10(step)))
+  val n = step / mag
+  val nice = when {
+    n <= 1 -> 1.0
+    n <= 2 -> 2.0
+    n <= 2.5 -> 2.5
+    n <= 5 -> 5.0
+    else -> 10.0
+  }
+  return 3 * nice * mag
 }
