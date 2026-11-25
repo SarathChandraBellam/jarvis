@@ -52,9 +52,11 @@ class AndroidProactiveNotifier(context: Context) : ProactiveNotifier {
         .setAutoCancel(true)
         .setContentIntent(launchIntent())
         .build()
-      runCatching {
+      try {
         manager.notify(alert.dedupKey.hashCode(), notif)
         posted += alert.dedupKey
+      } catch (_: SecurityException) {
+        // Permission revoked between check and post.
       }
     }
     return posted
@@ -71,10 +73,12 @@ class AndroidProactiveNotifier(context: Context) : ProactiveNotifier {
       .setAutoCancel(true)
       .setContentIntent(launchIntent())
       .build()
-    return runCatching {
+    return try {
       NotificationManagerCompat.from(app).notify(9001, notif)
       true
-    }.getOrDefault(false)
+    } catch (_: SecurityException) {
+      false
+    }
   }
 
   private fun canPost(): Boolean {

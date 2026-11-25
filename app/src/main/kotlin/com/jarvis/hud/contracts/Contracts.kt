@@ -1,5 +1,6 @@
 package com.jarvis.hud.contracts
 
+import com.jarvis.hud.model.AgentDecision
 import com.jarvis.hud.model.AppUsageStat
 import com.jarvis.hud.model.CalendarEntry
 import com.jarvis.hud.model.CallSummary
@@ -10,9 +11,12 @@ import com.jarvis.hud.model.DailyBriefing
 import com.jarvis.hud.model.DataSource
 import com.jarvis.hud.model.DeviceTelemetry
 import com.jarvis.hud.model.HabitItem
+import com.jarvis.hud.model.HealthSnapshot
 import com.jarvis.hud.model.ItemStatus
 import com.jarvis.hud.model.JarvisSettings
+import com.jarvis.hud.model.JarvisUiState
 import com.jarvis.hud.model.MealLog
+import com.jarvis.hud.model.MessageClassification
 import com.jarvis.hud.model.OpenRouterModelInfo
 import com.jarvis.hud.model.OrganizedItem
 import com.jarvis.hud.model.PermissionStatus
@@ -38,6 +42,22 @@ interface PhoneDataSource {
 /** Optional hardware step-counter reader (falls back cleanly when no sensor/permission). */
 interface StepSensorSource {
   suspend fun readTodaySteps(): Int?
+}
+
+/** Unified Health Connect / Garmin Connect / wearable health telemetry source. */
+interface HealthDataSource {
+  suspend fun isAvailable(): Boolean
+  suspend fun hasPermissions(): Boolean
+  suspend fun readTodaySnapshot(): HealthSnapshot
+}
+
+/** Voice speech-to-text controller for hands-free talking to J.A.R.V.I.S. */
+interface VoiceListener {
+  val isListening: StateFlow<Boolean>
+  val partialTranscript: StateFlow<String>
+  fun startListening(onResult: (String) -> Unit, onError: (String) -> Unit)
+  fun stopListening()
+  fun destroy()
 }
 
 interface NotificationFeed {
@@ -87,9 +107,16 @@ interface AskAssistant {
   ): ChatMessage
 }
 
+/** Agentic decision engine: interprets voice/text commands into spoken replies + autonomous actions. */
+interface AgentEngine {
+  suspend fun decide(prompt: String, state: JarvisUiState): AgentDecision
+}
+
 interface IntelStore {
   val items: StateFlow<List<OrganizedItem>>
+  val classificationMap: StateFlow<Map<String, MessageClassification>>
   suspend fun upsert(items: List<OrganizedItem>)
+  suspend fun recordClassifications(entries: Collection<MessageClassification>)
   suspend fun setStatus(itemId: String, status: ItemStatus)
   suspend fun isProcessed(contentHash: String): Boolean
   suspend fun markProcessed(hashes: Collection<String>)
@@ -156,6 +183,8 @@ interface Speaker {
 interface JarvisContainer {
   val phoneData: PhoneDataSource
   val stepSensor: StepSensorSource
+  val healthData: HealthDataSource
+  val voiceListener: VoiceListener
   val notifications: NotificationFeed
   val permissions: PermissionChecker
   val settingsRepo: SettingsRepository
@@ -163,6 +192,8 @@ interface JarvisContainer {
   val organizer: IntelOrganizer
   val briefings: BriefingGenerator
   val assistant: AskAssistant
+  val agent: AgentEngine?
+    get() = null
   val store: IntelStore
   val plannerStore: PlannerStore
   val notifier: ProactiveNotifier

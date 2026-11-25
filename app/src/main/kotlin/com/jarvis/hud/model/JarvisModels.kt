@@ -306,16 +306,67 @@ data class PermissionStatus(
   val usageAccessGranted: Boolean,
   val notificationsPostGranted: Boolean = true,
   val activityRecognitionGranted: Boolean = true,
+  val microphoneGranted: Boolean = false,
+  val healthConnectGranted: Boolean = false,
 ) {
   val grantedCount: Int
     get() = listOf(
-      smsGranted,
       notificationAccessGranted,
+      healthConnectGranted,
+      microphoneGranted,
       calendarGranted,
-      callLogGranted,
-      usageAccessGranted,
+      notificationsPostGranted,
     ).count { it }
 }
+
+/** Explicit mapping of an ingested message/notification ID to its AI classification. */
+data class MessageClassification(
+  val messageId: String,
+  val category: IntelCategory,
+  val priority: Priority,
+  val source: DataSource,
+  val sender: String,
+  val title: String,
+  val classifiedBy: String = "local",
+  val timestamp: Long = 0L,
+)
+
+/** Unified health telemetry pulled from Android Health Connect (Garmin Connect / watch) or phone sensors. */
+data class HealthSnapshot(
+  val stepsToday: Int? = null,
+  val sleepMinutesLastNight: Int? = null,
+  val bedtimeLabel: String? = null,
+  val wakeLabel: String? = null,
+  val heartRateBpm: Int? = null,
+  val activeCaloriesKcal: Int? = null,
+  val recentWorkouts: List<WorkoutLog> = emptyList(),
+  val sourceLabel: String = "Device sensors",
+  val connected: Boolean = false,
+  val garminDetected: Boolean = false,
+  val syncedAtMillis: Long = 0L,
+)
+
+/** Structured action proposed by J.A.R.V.I.S. from natural speech or text. */
+data class AgentAction(
+  val type: String,
+  val params: Map<String, String> = emptyMap(),
+)
+
+/** Result of an agentic decision turn (spoken reply + zero or more autonomous actions). */
+data class AgentDecision(
+  val reply: String,
+  val actions: List<AgentAction> = emptyList(),
+  val modelUsed: String = "local",
+)
+
+/** Audit log entry shown on the HUD when J.A.R.V.I.S. autonomously logs or updates state. */
+data class AgentActionLog(
+  val id: String,
+  val actionType: String,
+  val summary: String,
+  val timestamp: Long,
+  val succeeded: Boolean = true,
+)
 
 data class JarvisSettings(
   val apiKey: String = "",
@@ -364,6 +415,8 @@ data class JarvisUiState(
   val isSyncing: Boolean = false,
   val syncStatusLine: String = "Ready",
   val isSpeaking: Boolean = false,
+  val isListening: Boolean = false,
+  val liveTranscript: String = "",
   val isAskingAi: Boolean = false,
   val settings: JarvisSettings = JarvisSettings(),
   val permissions: PermissionStatus = PermissionStatus(
@@ -379,8 +432,11 @@ data class JarvisUiState(
     freeStorageGb = 64.5f,
     totalStorageGb = 128.0f,
   ),
+  val healthSnapshot: HealthSnapshot = HealthSnapshot(),
   val briefing: DailyBriefing? = null,
   val items: List<OrganizedItem> = emptyList(),
+  val classificationMap: Map<String, MessageClassification> = emptyMap(),
+  val recentAgentActions: List<AgentActionLog> = emptyList(),
   val subscriptions: List<TrackedSubscription> = emptyList(),
   val reminders: List<PlannerReminder> = emptyList(),
   val proactiveAlerts: List<ProactiveAlert> = emptyList(),
@@ -423,6 +479,9 @@ interface JarvisActions {
   fun onDismissError()
   fun onOpenItem(itemId: String?)
   fun onClearChat()
+  fun onToggleVoiceListening() {}
+  fun onRequestHealthConnectPermissions() {}
+  fun onOpenHealthConnectSettings() {}
   fun onSelectTodayView(index: Int) {}
   fun onSelectSubsView(index: Int) {}
   fun onSelectInboxFilter(categoryName: String?, showCompleted: Boolean) {}
