@@ -27,11 +27,11 @@ android {
   }
 
   // Release signing reads a properties file kept OUTSIDE the repo.
-  // Default: ~/.android-keystores/astra-keystore.properties (override with -PastraKeystoreProps=<path>).
+  // Default: ~/.android-keystores/jarvis-keystore.properties (override with -PastraKeystoreProps=<path>).
   // Keys: storeFile, storePassword, keyAlias, keyPassword. If absent, release builds are unsigned.
   val keystorePropsFile = file(
     (project.findProperty("astraKeystoreProps") as String?)
-      ?: "${System.getProperty("user.home")}/.android-keystores/astra-keystore.properties"
+      ?: "${System.getProperty("user.home")}/.android-keystores/jarvis-keystore.properties"
   )
   val releaseSigning = if (keystorePropsFile.exists()) {
     val props = Properties().apply { keystorePropsFile.inputStream().use { load(it) } }

@@ -30,7 +30,7 @@ Requires JDK 17 and Android SDK platform 37.
 ```
 
 Release signing is read from a properties file outside the repo
-(`~/.android-keystores/astra-keystore.properties`, or `-PastraKeystoreProps=<path>`)
+(`~/.android-keystores/jarvis-keystore.properties`, or `-PastraKeystoreProps=<path>`)
 with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Without it, the release APK is unsigned.
 
 ### Tests
@@ -42,4 +42,4 @@ with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Without it, the re
 - **Settings persistence tests** that check every setting survives an app restart.
 - **Screenshot tests** that render each screen to `app/build/screenshots/`.
 
-GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. To release, bump `versionName`/`versionCode`, move the changes under that version in [CHANGELOG.md](CHANGELOG.md), and push to `main`: CI publishes a GitHub release with the APK and that changelog section once tests pass. (Pushing a `vX.Y.Z` tag does the same.) To sign release builds in CI, add the `ASTRA_KEYSTORE_B64`, `ASTRA_STORE_PASSWORD`, `ASTRA_KEY_ALIAS` and `ASTRA_KEY_PASSWORD` repository secrets.
+GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. To release, bump `versionName`/`versionCode`, move the changes under that version in [CHANGELOG.md](CHANGELOG.md), and push to `main`: CI publishes a GitHub release with the APK and that changelog section once tests pass. (Pushing a `vX.Y.Z` tag does the same.) To sign release builds in CI, add the `JARVIS_KEYSTORE_B64`, `JARVIS_STORE_PASSWORD`, `JARVIS_KEY_ALIAS` and `JARVIS_KEY_PASSWORD` repository secrets.

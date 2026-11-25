@@ -11,8 +11,7 @@ release with the APK and that section as the notes.
 - **Renamed the app to ASTRA.** Removed all film-franchise names and references: app name, package
   (`com.astra.hud`), classes, AI persona prompts, storage keys, notification channels, sample data and
   docs. The new `applicationId` installs as a separate app, so previous data does not carry over.
-  CI signing secrets are now `ASTRA_KEYSTORE_B64`, `ASTRA_STORE_PASSWORD`, `ASTRA_KEY_ALIAS` and
-  `ASTRA_KEY_PASSWORD`.
+  CI signing secret names and the local keystore properties path are unchanged, so existing secrets keep working.
 
 ## [2.0.0] - 2026-11-25
 

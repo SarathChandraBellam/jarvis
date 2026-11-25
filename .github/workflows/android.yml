@@ -28,14 +28,14 @@ jobs:
         run: ./gradlew testDebugUnitTest
 
       # Optional release signing: add repository secrets
-      #   ASTRA_KEYSTORE_B64 (base64 of the .jks), ASTRA_STORE_PASSWORD, ASTRA_KEY_ALIAS, ASTRA_KEY_PASSWORD.
+      #   JARVIS_KEYSTORE_B64 (base64 of the .jks), JARVIS_STORE_PASSWORD, JARVIS_KEY_ALIAS, JARVIS_KEY_PASSWORD.
       # Without them the workflow still builds a debug-signed APK you can install.
       - name: Prepare signing
         env:
-          KEYSTORE_B64: ${{ secrets.ASTRA_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.ASTRA_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ASTRA_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ASTRA_KEY_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.JARVIS_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.JARVIS_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.JARVIS_KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/astra.jks"
