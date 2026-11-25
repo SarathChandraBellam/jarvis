@@ -19,7 +19,7 @@ const SCREENS = [
   { id: 'subs-bills', label: 'Bills', group: 'Money', description: 'Upcoming bills due soon and recurring utilities', wide: false },
   { id: 'inbox', label: 'Inbox', group: 'Inbox', description: 'Categorized SMS, notifications, deliveries, and finance items', wide: false },
   { id: 'sheet', label: 'Item Detail', group: 'Inbox', description: 'Detail bottom sheet with mark-done, dismiss, and share actions', wide: false },
-  { id: 'ask', label: 'Ask Jarvis', group: 'Assistant', description: 'Conversational Q&A over your local inbox and telemetry', wide: false },
+  { id: 'ask', label: 'Ask ASTRA', group: 'Assistant', description: 'Conversational Q&A over your local inbox and telemetry', wide: false },
   { id: 'settings', label: 'Settings', group: 'System', description: 'Auto-saving preferences, privacy redaction, and OpenRouter key', wide: false },
   { id: 'onboarding', label: 'Onboarding', group: 'System', description: 'First-launch welcome flow for callsign and permissions', wide: false },
   { id: 'home-empty', label: 'Empty State', group: 'System', description: 'First-run Today view before permissions are granted', wide: false },
@@ -49,8 +49,8 @@ function getStatus() {
   }
 
   return {
-    appName: 'J.A.R.V.I.S. HUD',
-    applicationId: 'com.jarvis.hud',
+    appName: 'ASTRA HUD',
+    applicationId: 'com.astra.hud',
     versionName: '2.0.0',
     minSdk: 26,
     targetSdk: 36,
@@ -75,7 +75,7 @@ function renderHtml(status) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>J.A.R.V.I.S. HUD — Android Preview</title>
+  <title>ASTRA HUD — Android Preview</title>
   <style>
     :root {
       --bg: #FAF7F2;
@@ -335,14 +335,14 @@ function renderHtml(status) {
     <div class="brand">
       <div class="monogram" aria-hidden="true">J</div>
       <div>
-        <h1>J.A.R.V.I.S. HUD</h1>
-        <div class="subtitle">Native Android (Kotlin + Jetpack Compose) · com.jarvis.hud v${status.versionName}</div>
+        <h1>ASTRA HUD</h1>
+        <div class="subtitle">Native Android (Kotlin + Jetpack Compose) · com.astra.hud v${status.versionName}</div>
       </div>
     </div>
     <div class="actions">
       ${
         status.apk.exists
-          ? `<a class="btn-primary" href="/download/app-debug.apk" download="jarvis-hud-debug.apk">Download Debug APK (${formatBytes(status.apk.sizeBytes)})</a>`
+          ? `<a class="btn-primary" href="/download/app-debug.apk" download="astra-hud-debug.apk">Download Debug APK (${formatBytes(status.apk.sizeBytes)})</a>`
           : `<span class="btn-secondary">APK not built yet</span>`
       }
     </div>
@@ -478,7 +478,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': 'application/vnd.android.package-archive',
       'Content-Length': stat.size,
-      'Content-Disposition': 'attachment; filename="jarvis-hud-debug.apk"',
+      'Content-Disposition': 'attachment; filename="astra-hud-debug.apk"',
       'Cache-Control': 'no-store',
     });
     fs.createReadStream(APK_PATH).pipe(res);
@@ -520,5 +520,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`J.A.R.V.I.S. HUD Android preview server listening on http://${HOST}:${PORT}`);
+  console.log(`ASTRA HUD Android preview server listening on http://${HOST}:${PORT}`);
 });

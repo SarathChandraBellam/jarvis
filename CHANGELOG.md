@@ -1,11 +1,18 @@
 # Changelog
 
-All notable changes to J.A.R.V.I.S. HUD, newest first. Versions match `versionName` in
+All notable changes to ASTRA HUD, newest first. Versions match `versionName` in
 `app/build.gradle.kts`. Add each change under **Unreleased**. To release, rename that heading to the
 version and date, bump `versionName` and `versionCode`, and push to `main`: CI publishes the GitHub
 release with the APK and that section as the notes.
 
 ## [Unreleased]
+
+### Changed
+- **Renamed the app to ASTRA.** Removed all film-franchise names and references: app name, package
+  (`com.astra.hud`), classes, AI persona prompts, storage keys, notification channels, sample data and
+  docs. The new `applicationId` installs as a separate app, so previous data does not carry over.
+  CI signing secrets are now `ASTRA_KEYSTORE_B64`, `ASTRA_STORE_PASSWORD`, `ASTRA_KEY_ALIAS` and
+  `ASTRA_KEY_PASSWORD`.
 
 ## [2.0.0] - 2026-11-25
 

@@ -7,10 +7,10 @@ plugins {
 }
 
 android {
-  namespace = "com.jarvis.hud"
+  namespace = "com.astra.hud"
   compileSdk = 36
   defaultConfig {
-    applicationId = "com.jarvis.hud"
+    applicationId = "com.astra.hud"
     minSdk = 26
     targetSdk = 36
     versionCode = 5
@@ -27,11 +27,11 @@ android {
   }
 
   // Release signing reads a properties file kept OUTSIDE the repo.
-  // Default: ~/.android-keystores/jarvis-keystore.properties (override with -PjarvisKeystoreProps=<path>).
+  // Default: ~/.android-keystores/astra-keystore.properties (override with -PastraKeystoreProps=<path>).
   // Keys: storeFile, storePassword, keyAlias, keyPassword. If absent, release builds are unsigned.
   val keystorePropsFile = file(
-    (project.findProperty("jarvisKeystoreProps") as String?)
-      ?: "${System.getProperty("user.home")}/.android-keystores/jarvis-keystore.properties"
+    (project.findProperty("astraKeystoreProps") as String?)
+      ?: "${System.getProperty("user.home")}/.android-keystores/astra-keystore.properties"
   )
   val releaseSigning = if (keystorePropsFile.exists()) {
     val props = Properties().apply { keystorePropsFile.inputStream().use { load(it) } }

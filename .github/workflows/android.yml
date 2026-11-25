@@ -28,24 +28,24 @@ jobs:
         run: ./gradlew testDebugUnitTest
 
       # Optional release signing: add repository secrets
-      #   JARVIS_KEYSTORE_B64 (base64 of the .jks), JARVIS_STORE_PASSWORD, JARVIS_KEY_ALIAS, JARVIS_KEY_PASSWORD.
+      #   ASTRA_KEYSTORE_B64 (base64 of the .jks), ASTRA_STORE_PASSWORD, ASTRA_KEY_ALIAS, ASTRA_KEY_PASSWORD.
       # Without them the workflow still builds a debug-signed APK you can install.
       - name: Prepare signing
         env:
-          KEYSTORE_B64: ${{ secrets.JARVIS_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.JARVIS_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.JARVIS_KEY_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.ASTRA_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.ASTRA_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ASTRA_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ASTRA_KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/jarvis.jks"
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/astra.jks"
             {
-              echo "storeFile=$RUNNER_TEMP/jarvis.jks"
+              echo "storeFile=$RUNNER_TEMP/astra.jks"
               echo "storePassword=$STORE_PASSWORD"
               echo "keyAlias=$KEY_ALIAS"
               echo "keyPassword=$KEY_PASSWORD"
             } > "$RUNNER_TEMP/keystore.properties"
-            echo "SIGN_ARGS=-PjarvisKeystoreProps=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
+            echo "SIGN_ARGS=-PastraKeystoreProps=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
           fi
 
       - name: Build APKs
@@ -53,7 +53,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: jarvis-apk
+          name: astra-apk
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
@@ -94,13 +94,13 @@ jobs:
           VERSION="${TAG#v}"
           APK=app/build/outputs/apk/release/app-release.apk
           [ -f "$APK" ] || APK=app/build/outputs/apk/debug/app-debug.apk
-          cp "$APK" "jarvis-${TAG}.apk"
-          CERT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "jarvis-${TAG}.apk" \
+          cp "$APK" "astra-${TAG}.apk"
+          CERT=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "astra-${TAG}.apk" \
             | sed -n 's/.*SHA-256 digest: //p' | head -1)
           # v1.1.0's signing certificate: same key means the APK updates it in place.
           PREVIOUS=e2c0c44f4f2fadde2ca930c5c6f634014ac2c75de2b45b80b55802364c90e501
           {
-            echo "**Install:** download \`jarvis-${TAG}.apk\` below and open it on your Android phone (8.0+)."
+            echo "**Install:** download \`astra-${TAG}.apk\` below and open it on your Android phone (8.0+)."
             echo
             if [ "$CERT" = "$PREVIOUS" ]; then
               echo "Updates v1.1.0 in place; your data is kept."
@@ -122,6 +122,6 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ github.sha }}
-          name: J.A.R.V.I.S. HUD ${{ env.RELEASE_TAG }}
+          name: ASTRA HUD ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
-          files: jarvis-${{ env.RELEASE_TAG }}.apk
+          files: astra-${{ env.RELEASE_TAG }}.apk

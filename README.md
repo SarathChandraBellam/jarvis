@@ -1,6 +1,6 @@
-# J.A.R.V.I.S. HUD
+# ASTRA HUD
 
-An on-device personal assistant for Android (Kotlin + Jetpack Compose). It reads your SMS, notifications, calendar, call log and screen time, sorts them into an inbox (finance, bills, deliveries, travel…), and shows a daily briefing, a money view and an "Ask Jarvis" chat.
+An on-device personal assistant for Android (Kotlin + Jetpack Compose). It reads your SMS, notifications, calendar, call log and screen time, sorts them into an inbox (finance, bills, deliveries, travel…), and shows a daily briefing, a money view and an "Ask ASTRA" chat.
 
 - **Tabs:** Home · Money · Inbox · Ask, plus Settings
 - **AI:** OpenRouter (bring your own key, stored encrypted on device) or a fully local parser
@@ -17,7 +17,7 @@ An on-device personal assistant for Android (Kotlin + Jetpack Compose). It reads
 
 Download the APK from [Releases](../../releases) and open it on your phone (allow "install unknown apps"). Requires Android 8.0+ (API 26).
 
-**"App blocked to protect your device"?** Google Play Protect blocks sideloaded apps that ask for SMS or notification access when they're installed from a browser or file manager. Either install over USB with `adb install jarvis.apk`, or temporarily turn off *Play Store → Play Protect → ⚙ → Scan apps with Play Protect*, install, and turn it back on.
+**"App blocked to protect your device"?** Google Play Protect blocks sideloaded apps that ask for SMS or notification access when they're installed from a browser or file manager. Either install over USB with `adb install astra.apk`, or temporarily turn off *Play Store → Play Protect → ⚙ → Scan apps with Play Protect*, install, and turn it back on.
 
 ## Build
 
@@ -30,7 +30,7 @@ Requires JDK 17 and Android SDK platform 37.
 ```
 
 Release signing is read from a properties file outside the repo
-(`~/.android-keystores/jarvis-keystore.properties`, or `-PjarvisKeystoreProps=<path>`)
+(`~/.android-keystores/astra-keystore.properties`, or `-PastraKeystoreProps=<path>`)
 with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Without it, the release APK is unsigned.
 
 ### Tests
@@ -42,4 +42,4 @@ with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Without it, the re
 - **Settings persistence tests** that check every setting survives an app restart.
 - **Screenshot tests** that render each screen to `app/build/screenshots/`.
 
-GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. To release, bump `versionName`/`versionCode`, move the changes under that version in [CHANGELOG.md](CHANGELOG.md), and push to `main`: CI publishes a GitHub release with the APK and that changelog section once tests pass. (Pushing a `vX.Y.Z` tag does the same.) To sign release builds in CI, add the `JARVIS_KEYSTORE_B64`, `JARVIS_STORE_PASSWORD`, `JARVIS_KEY_ALIAS` and `JARVIS_KEY_PASSWORD` repository secrets.
+GitHub Actions (`.github/workflows/android.yml`) runs the tests on every push and uploads the APKs and screenshots as artifacts. To release, bump `versionName`/`versionCode`, move the changes under that version in [CHANGELOG.md](CHANGELOG.md), and push to `main`: CI publishes a GitHub release with the APK and that changelog section once tests pass. (Pushing a `vX.Y.Z` tag does the same.) To sign release builds in CI, add the `ASTRA_KEYSTORE_B64`, `ASTRA_STORE_PASSWORD`, `ASTRA_KEY_ALIAS` and `ASTRA_KEY_PASSWORD` repository secrets.
