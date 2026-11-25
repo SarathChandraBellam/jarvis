@@ -8,15 +8,22 @@ plugins {
 
 android {
   namespace = "com.jarvis.hud"
-  compileSdk {
-    version = release(37) { minorApiLevel = 0 }
-  }
+  compileSdk = 36
   defaultConfig {
     applicationId = "com.jarvis.hud"
     minSdk = 26
-    targetSdk = 37
+    targetSdk = 36
     versionCode = 5
     versionName = "2.0.0"
+  }
+
+  signingConfigs {
+    create("debugConfig") {
+      storeFile = file("${rootDir}/debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
+    }
   }
 
   // Release signing reads a properties file kept OUTSIDE the repo.
@@ -37,6 +44,9 @@ android {
   } else null
 
   buildTypes {
+    debug {
+      signingConfig = signingConfigs.getByName("debugConfig")
+    }
     release {
       releaseSigning?.let { signingConfig = it }
       isMinifyEnabled = false
@@ -64,7 +74,9 @@ android {
 }
 
 kotlin {
-  jvmToolchain(17)
+  compilerOptions {
+    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+  }
 }
 
 dependencies {
